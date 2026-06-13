@@ -1,0 +1,55 @@
+<Window x:Class="DawloomAttendance.Views.EmployeesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Employees" Height="520" Width="900"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+            <Button x:Name="ImportButton" Content="Import from Device" Width="140" Height="30" Margin="0,0,8,6"
+                    Click="ImportButton_Click"
+                    ToolTip="Pull enrolled users off the K70 and add any new ones as employees." />
+            <Button x:Name="AddButton" Content="Add" Width="70" Height="30" Margin="0,0,8,6" Click="AddButton_Click" />
+            <Button x:Name="DeleteButton" Content="Delete (local)" Width="100" Height="30" Margin="0,0,8,6" Click="DeleteButton_Click"
+                    ToolTip="Remove the employee row from this app only (does not touch the device)." />
+            <Button x:Name="SaveButton" Content="Save All" Width="80" Height="30" Margin="0,0,8,6" Click="SaveButton_Click" />
+            <Button x:Name="RefreshButton" Content="Refresh" Width="70" Height="30" Margin="0,0,8,6" Click="RefreshButton_Click" />
+            <Button x:Name="ShiftsButton" Content="Shifts…" Width="75" Height="30" Margin="0,0,8,6" Click="ShiftsButton_Click"
+                    ToolTip="Manage shift templates." />
+            <Separator Width="2" Margin="4,0,8,6" />
+            <Button x:Name="PushButton" Content="Push to Device" Width="120" Height="30" Margin="0,0,8,6" Click="PushButton_Click"
+                    ToolTip="Create/update the selected employees' user records on the device (not fingerprints)." />
+            <Button x:Name="RemoveDeviceButton" Content="Remove from Device" Width="150" Height="30" Margin="0,0,8,6"
+                    Click="RemoveDeviceButton_Click"
+                    ToolTip="PERMANENTLY delete the selected users (and their fingerprints) from the device." />
+        </WrapPanel>
+
+        <DataGrid Grid.Row="1" x:Name="Grid" AutoGenerateColumns="False" CanUserAddRows="False"
+                  SelectionMode="Extended" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Enroll #" Binding="{Binding EnrollNumber}" Width="80" />
+                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="160" />
+                <DataGridTextColumn Header="CNIC" Binding="{Binding Cnic}" Width="130" />
+                <DataGridTextColumn Header="Department" Binding="{Binding Department}" Width="130" />
+                <DataGridTextColumn Header="Designation" Binding="{Binding Designation}" Width="130" />
+                <DataGridTextColumn Header="Contact" Binding="{Binding Contact}" Width="120" />
+                <DataGridComboBoxColumn Header="Shift" x:Name="ShiftColumn" Width="150"
+                                        SelectedValueBinding="{Binding ShiftId}"
+                                        SelectedValuePath="Id" DisplayMemberPath="Display" />
+                <DataGridCheckBoxColumn Header="Active" Binding="{Binding Active}" Width="55" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0">
+            <TextBlock x:Name="StatusText" VerticalAlignment="Center" Foreground="Gray" />
+            <Button Content="Close" Width="90" Height="28" HorizontalAlignment="Right" Margin="20,0,0,0"
+                    IsCancel="True" />
+        </StackPanel>
+    </Grid>
+</Window>

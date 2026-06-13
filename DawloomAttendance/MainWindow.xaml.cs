@@ -72,6 +72,19 @@ namespace DawloomAttendance
                 FeedList.Items.Add(FormatPunch(p.Timestamp, p.EnrollNumber, p.AttState, p.VerifyMethod));
         }
 
+        private void EmployeesButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_db == null) { Log("[FAIL] Database unavailable — cannot open Employees."); return; }
+            var win = new Views.EmployeesWindow(_db, _device, _settings.MachineNumber) { Owner = this };
+            win.ShowDialog();
+        }
+
+        private void HolidaysButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_db == null) { Log("[FAIL] Database unavailable — cannot open Holidays."); return; }
+            new Views.HolidaysWindow(_db) { Owner = this }.ShowDialog();
+        }
+
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new Views.SettingsWindow(_settings) { Owner = this };

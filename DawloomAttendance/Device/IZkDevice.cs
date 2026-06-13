@@ -17,6 +17,15 @@ namespace DawloomAttendance.Device
 
         IEnumerable<PunchEvent> ReadAllLogs(int machineNumber);
 
+        /// <summary>Reads all users enrolled on the device.</summary>
+        IEnumerable<DeviceUser> ReadAllUsers(int machineNumber);
+
+        /// <summary>Creates/updates a user record on the device (not the fingerprint). Returns success.</summary>
+        bool PushUser(int machineNumber, DeviceUser user);
+
+        /// <summary>Removes a user (and their enrolled biometrics) from the device. Returns success.</summary>
+        bool DeleteUser(int machineNumber, string enrollNumber);
+
         /// <summary>Sets the device clock to this PC's current time. Returns success.</summary>
         bool SyncTime(int machineNumber);
 

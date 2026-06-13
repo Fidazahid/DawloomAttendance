@@ -75,6 +75,41 @@ CREATE TABLE IF NOT EXISTS DeviceLog (
     Level       TEXT NOT NULL,
     Event       TEXT NOT NULL,
     Detail      TEXT
+);
+
+CREATE TABLE IF NOT EXISTS Employee (
+    Id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    EnrollNumber  TEXT NOT NULL UNIQUE,
+    Name          TEXT,
+    Cnic          TEXT,
+    Department    TEXT,
+    Designation   TEXT,
+    Contact       TEXT,
+    ShiftId       INTEGER,
+    Active        INTEGER NOT NULL DEFAULT 1,
+    CreatedAt     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS Shift (
+    Id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    Name          TEXT NOT NULL,
+    StartTime     TEXT NOT NULL,
+    EndTime       TEXT NOT NULL,
+    GraceMinutes  INTEGER NOT NULL DEFAULT 0,
+    WeekendDays   TEXT,
+    Active        INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS Holiday (
+    Id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    Date      TEXT NOT NULL,
+    Label     TEXT,
+    Recurring INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS Setting (
+    Key   TEXT PRIMARY KEY,
+    Value TEXT
 );";
                 cmd.ExecuteNonQuery();
             }
@@ -171,6 +206,327 @@ FROM RawPunch ORDER BY Id DESC LIMIT $limit;";
                 cmd.CommandText = "SELECT COUNT(*) FROM RawPunch;";
                 return Convert.ToInt64(cmd.ExecuteScalar());
             }
+        }
+
+        // ---- Employees ---------------------------------------------------------------
+
+        public IReadOnlyList<Employee> GetEmployees()
+        {
+            var list = new List<Employee>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+SELECT Id, EnrollNumber, Name, Cnic, Department, Designation, Contact, ShiftId, Active, CreatedAt
+FROM Employee ORDER BY CAST(EnrollNumber AS INTEGER), EnrollNumber;";
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        list.Add(new Employee
+                        {
+                            Id = r.GetInt64(0),
+                            EnrollNumber = r.GetString(1),
+                            Name = r.IsDBNull(2) ? null : r.GetString(2),
+                            Cnic = r.IsDBNull(3) ? null : r.GetString(3),
+                            Department = r.IsDBNull(4) ? null : r.GetString(4),
+                            Designation = r.IsDBNull(5) ? null : r.GetString(5),
+                            Contact = r.IsDBNull(6) ? null : r.GetString(6),
+                            ShiftId = r.IsDBNull(7) ? (long?)null : r.GetInt64(7),
+                            Active = r.GetInt32(8) != 0,
+                            CreatedAt = ParseTime(r.GetString(9))
+                        });
+                    }
+                }
+            }
+            return list;
+        }
+
+        /// <summary>Inserts a placeholder employee for a device enroll number if absent. Returns true if inserted.</summary>
+        public bool InsertEmployeeIfNew(string enrollNumber, string name)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+INSERT INTO Employee (EnrollNumber, Name, Active, CreatedAt)
+SELECT $enroll, $name, 1, $created
+WHERE NOT EXISTS (SELECT 1 FROM Employee WHERE EnrollNumber = $enroll);";
+                cmd.Parameters.AddWithValue("$enroll", enrollNumber ?? string.Empty);
+                cmd.Parameters.AddWithValue("$name", (object)name ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("$created", DateTime.Now.ToString(TimeFormat));
+                return cmd.ExecuteNonQuery() > 0;
+            }
+        }
+
+        public long InsertEmployee(Employee e)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+INSERT INTO Employee (EnrollNumber, Name, Cnic, Department, Designation, Contact, ShiftId, Active, CreatedAt)
+VALUES ($enroll, $name, $cnic, $dept, $desig, $contact, $shift, $active, $created);";
+                BindEmployee(cmd, e);
+                cmd.Parameters.AddWithValue("$created", (e.CreatedAt == default ? DateTime.Now : e.CreatedAt).ToString(TimeFormat));
+                cmd.ExecuteNonQuery();
+                return conn.LastInsertRowId;
+            }
+        }
+
+        public void UpdateEmployee(Employee e)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+UPDATE Employee SET EnrollNumber=$enroll, Name=$name, Cnic=$cnic, Department=$dept,
+    Designation=$desig, Contact=$contact, ShiftId=$shift, Active=$active
+WHERE Id=$id;";
+                BindEmployee(cmd, e);
+                cmd.Parameters.AddWithValue("$id", e.Id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public void DeleteEmployee(long id)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "DELETE FROM Employee WHERE Id=$id;";
+                cmd.Parameters.AddWithValue("$id", id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        // ---- Shifts ------------------------------------------------------------------
+
+        public IReadOnlyList<Shift> GetShifts()
+        {
+            var list = new List<Shift>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+SELECT Id, Name, StartTime, EndTime, GraceMinutes, WeekendDays, Active FROM Shift ORDER BY Name;";
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        list.Add(new Shift
+                        {
+                            Id = r.GetInt64(0),
+                            Name = r.IsDBNull(1) ? null : r.GetString(1),
+                            StartTime = r.IsDBNull(2) ? null : r.GetString(2),
+                            EndTime = r.IsDBNull(3) ? null : r.GetString(3),
+                            GraceMinutes = r.GetInt32(4),
+                            WeekendDays = r.IsDBNull(5) ? null : r.GetString(5),
+                            Active = r.GetInt32(6) != 0
+                        });
+                    }
+                }
+            }
+            return list;
+        }
+
+        public long InsertShift(Shift s)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+INSERT INTO Shift (Name, StartTime, EndTime, GraceMinutes, WeekendDays, Active)
+VALUES ($name, $start, $end, $grace, $weekend, $active);";
+                BindShift(cmd, s);
+                cmd.ExecuteNonQuery();
+                return conn.LastInsertRowId;
+            }
+        }
+
+        public void UpdateShift(Shift s)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+UPDATE Shift SET Name=$name, StartTime=$start, EndTime=$end, GraceMinutes=$grace,
+    WeekendDays=$weekend, Active=$active WHERE Id=$id;";
+                BindShift(cmd, s);
+                cmd.Parameters.AddWithValue("$id", s.Id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public void DeleteShift(long id)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                // Unassign the shift from any employees, then remove it.
+                cmd.CommandText = "UPDATE Employee SET ShiftId=NULL WHERE ShiftId=$id; DELETE FROM Shift WHERE Id=$id;";
+                cmd.Parameters.AddWithValue("$id", id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        // ---- Holidays ----------------------------------------------------------------
+
+        private const string DateFormat = "yyyy-MM-dd";
+
+        public IReadOnlyList<Holiday> GetHolidays()
+        {
+            var list = new List<Holiday>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT Id, Date, Label, Recurring FROM Holiday ORDER BY Date;";
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        list.Add(new Holiday
+                        {
+                            Id = r.GetInt64(0),
+                            Date = ParseTime(r.GetString(1)),
+                            Label = r.IsDBNull(2) ? null : r.GetString(2),
+                            Recurring = r.GetInt32(3) != 0
+                        });
+                    }
+                }
+            }
+            return list;
+        }
+
+        public long InsertHoliday(Holiday h)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "INSERT INTO Holiday (Date, Label, Recurring) VALUES ($date, $label, $rec);";
+                BindHoliday(cmd, h);
+                cmd.ExecuteNonQuery();
+                return conn.LastInsertRowId;
+            }
+        }
+
+        public void UpdateHoliday(Holiday h)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "UPDATE Holiday SET Date=$date, Label=$label, Recurring=$rec WHERE Id=$id;";
+                BindHoliday(cmd, h);
+                cmd.Parameters.AddWithValue("$id", h.Id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        public void DeleteHoliday(long id)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "DELETE FROM Holiday WHERE Id=$id;";
+                cmd.Parameters.AddWithValue("$id", id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>
+        /// True if the given date is a non-working day: a weekly off-day (e.g. Sun/Sat),
+        /// an exact-dated holiday, or a recurring month/day holiday.
+        /// </summary>
+        public bool IsHoliday(DateTime date)
+        {
+            if (GetWeeklyOffDays().Contains((int)date.DayOfWeek))
+                return true;
+
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                // substr(Date,6,5) extracts "MM-dd" from a "yyyy-MM-dd" value.
+                cmd.CommandText = @"
+SELECT COUNT(*) FROM Holiday
+WHERE (Recurring = 0 AND Date = $exact)
+   OR (Recurring = 1 AND substr(Date, 6, 5) = $md);";
+                cmd.Parameters.AddWithValue("$exact", date.ToString(DateFormat));
+                cmd.Parameters.AddWithValue("$md", date.ToString("MM-dd"));
+                return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
+            }
+        }
+
+        // ---- Settings (key/value) ----------------------------------------------------
+
+        private const string WeeklyOffKey = "WeeklyOffDays";
+
+        public string GetSetting(string key)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT Value FROM Setting WHERE Key=$k;";
+                cmd.Parameters.AddWithValue("$k", key);
+                return cmd.ExecuteScalar() as string;
+            }
+        }
+
+        public void SetSetting(string key, string value)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+INSERT INTO Setting (Key, Value) VALUES ($k, $v)
+ON CONFLICT(Key) DO UPDATE SET Value=$v;";
+                cmd.Parameters.AddWithValue("$k", key);
+                cmd.Parameters.AddWithValue("$v", (object)value ?? DBNull.Value);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>Weekly recurring days off as day numbers (0=Sun … 6=Sat).</summary>
+        public HashSet<int> GetWeeklyOffDays()
+        {
+            var set = new HashSet<int>();
+            var csv = GetSetting(WeeklyOffKey);
+            if (!string.IsNullOrWhiteSpace(csv))
+                foreach (var tok in csv.Split(','))
+                    if (int.TryParse(tok.Trim(), out var d) && d >= 0 && d <= 6)
+                        set.Add(d);
+            return set;
+        }
+
+        public void SetWeeklyOffDays(System.Collections.Generic.IEnumerable<int> days)
+            => SetSetting(WeeklyOffKey, string.Join(",", days));
+
+        private static void BindHoliday(SQLiteCommand cmd, Holiday h)
+        {
+            cmd.Parameters.AddWithValue("$date", h.Date.ToString(DateFormat));
+            cmd.Parameters.AddWithValue("$label", (object)h.Label ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$rec", h.Recurring ? 1 : 0);
+        }
+
+        private static void BindShift(SQLiteCommand cmd, Shift s)
+        {
+            cmd.Parameters.AddWithValue("$name", (object)s.Name ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$start", (object)s.StartTime ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$end", (object)s.EndTime ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$grace", s.GraceMinutes);
+            cmd.Parameters.AddWithValue("$weekend", (object)s.WeekendDays ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$active", s.Active ? 1 : 0);
+        }
+
+        private static void BindEmployee(SQLiteCommand cmd, Employee e)
+        {
+            cmd.Parameters.AddWithValue("$enroll", e.EnrollNumber ?? string.Empty);
+            cmd.Parameters.AddWithValue("$name", (object)e.Name ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$cnic", (object)e.Cnic ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$dept", (object)e.Department ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$desig", (object)e.Designation ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$contact", (object)e.Contact ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$shift", (object)e.ShiftId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$active", e.Active ? 1 : 0);
         }
 
         private SQLiteConnection Open()

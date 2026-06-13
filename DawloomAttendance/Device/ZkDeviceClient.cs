@@ -77,6 +77,12 @@ namespace DawloomAttendance.Device
 
         public IEnumerable<PunchEvent> ReadAllLogs(int machineNumber) => Run(() => ReadAllLogsCore(machineNumber));
 
+        public IEnumerable<DeviceUser> ReadAllUsers(int machineNumber) => Run(() => ReadAllUsersCore(machineNumber));
+
+        public bool PushUser(int machineNumber, DeviceUser user) => Run(() => PushUserCore(machineNumber, user));
+
+        public bool DeleteUser(int machineNumber, string enrollNumber) => Run(() => DeleteUserCore(machineNumber, enrollNumber));
+
         public bool SyncTime(int machineNumber) => Run(() => SyncTimeCore(machineNumber));
 
         public DateTime? GetDeviceTime(int machineNumber) => Run(() => GetDeviceTimeCore(machineNumber));
@@ -227,6 +233,76 @@ namespace DawloomAttendance.Device
             {
                 try { Invoke("EnableDevice", machineNumber, true); } catch { /* best effort */ }
             }
+        }
+
+        private IEnumerable<DeviceUser> ReadAllUsersCore(int machineNumber)
+        {
+            var users = new List<DeviceUser>();
+            if (_device == null) return users;
+#if ZK_TYPED
+            if (!_typed.ReadAllUserID(machineNumber))
+                return users;
+
+            string enroll, name, password; int privilege; bool enabled;
+            while (_typed.SSR_GetAllUserInfo(machineNumber, out enroll, out name, out password, out privilege, out enabled))
+            {
+                users.Add(new DeviceUser
+                {
+                    EnrollNumber = enroll,
+                    Name = string.IsNullOrWhiteSpace(name) ? null : name.Trim(),
+                    Privilege = privilege,
+                    Enabled = enabled
+                });
+            }
+#endif
+            // Late-bound can't marshal the out params (same reason as log reads), so
+            // user import requires the typed build (ZkSdk=true).
+            return users;
+        }
+
+        private bool PushUserCore(int machineNumber, DeviceUser user)
+        {
+            if (_device == null || user == null) return false;
+#if ZK_TYPED
+            try
+            {
+                _typed.EnableDevice(machineNumber, false);
+                try
+                {
+                    // SSR_SetUserInfo(machine, enroll, name, password, privilege, enabled)
+                    bool ok = _typed.SSR_SetUserInfo(machineNumber, user.EnrollNumber,
+                        user.Name ?? string.Empty, string.Empty, user.Privilege, user.Enabled);
+                    _typed.RefreshData(machineNumber);
+                    return ok;
+                }
+                finally { _typed.EnableDevice(machineNumber, true); }
+            }
+            catch { return false; }
+#else
+            return false;   // device writes require the typed build
+#endif
+        }
+
+        private bool DeleteUserCore(int machineNumber, string enrollNumber)
+        {
+            if (_device == null || string.IsNullOrWhiteSpace(enrollNumber)) return false;
+#if ZK_TYPED
+            try
+            {
+                _typed.EnableDevice(machineNumber, false);
+                try
+                {
+                    // backupNumber 12 = delete the whole user (all fingers/card/password).
+                    bool ok = _typed.SSR_DeleteEnrollData(machineNumber, enrollNumber, 12);
+                    _typed.RefreshData(machineNumber);
+                    return ok;
+                }
+                finally { _typed.EnableDevice(machineNumber, true); }
+            }
+            catch { return false; }
+#else
+            return false;
+#endif
         }
 
         private int GetLastErrorCore()

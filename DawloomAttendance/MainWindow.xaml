@@ -14,13 +14,21 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- Connection status -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
-            <Ellipse x:Name="StatusDot" Width="16" Height="16" Fill="Gray"
-                     VerticalAlignment="Center" />
-            <TextBlock x:Name="StatusText" Text="Disconnected" Margin="8,0,0,0"
-                       VerticalAlignment="Center" FontSize="16" FontWeight="SemiBold" />
-        </StackPanel>
+        <!-- Connection status + navigation -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                <Ellipse x:Name="StatusDot" Width="16" Height="16" Fill="Gray"
+                         VerticalAlignment="Center" />
+                <TextBlock x:Name="StatusText" Text="Disconnected" Margin="8,0,0,0"
+                           VerticalAlignment="Center" FontSize="16" FontWeight="SemiBold" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="EmployeesButton" Content="Employees…" Width="110" Height="30" Margin="0,0,8,0"
+                        Click="EmployeesButton_Click" />
+                <Button x:Name="HolidaysButton" Content="Holidays…" Width="100" Height="30"
+                        Click="HolidaysButton_Click" />
+            </StackPanel>
+        </Grid>
 
         <!-- Device target summary + Settings dialog launcher -->
         <GroupBox Grid.Row="1" Header="ZKTeco K70 Connection" Padding="10">

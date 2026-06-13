@@ -116,6 +116,18 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Views\EmployeesWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\ShiftsWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\HolidaysWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -128,11 +140,24 @@
       <DependentUpon>Views\SettingsWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Views\EmployeesWindow.xaml.cs">
+      <DependentUpon>Views\EmployeesWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Views\ShiftsWindow.xaml.cs">
+      <DependentUpon>Views\ShiftsWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Views\HolidaysWindow.xaml.cs">
+      <DependentUpon>Views\HolidaysWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
     <!-- Connection-test step: only the files needed to connect to the device.
          ZkConnectionMonitor, AppDb, BackfillService, logging, settings UI and
          the view models are added back as their Phase 1 steps land. -->
     <Compile Include="Device\DeviceSettings.cs" />
     <Compile Include="Device\IZkDevice.cs" />
+    <Compile Include="Device\DeviceUser.cs" />
     <Compile Include="Device\ZkDeviceClient.cs" />
     <Compile Include="Device\ZkConnectionMonitor.cs" />
     <Compile Include="Device\Events\PunchEvent.cs" />
@@ -140,6 +165,9 @@
     <Compile Include="Data\AppDb.cs" />
     <Compile Include="Data\Entities\RawPunch.cs" />
     <Compile Include="Data\Entities\DeviceLog.cs" />
+    <Compile Include="Data\Entities\Employee.cs" />
+    <Compile Include="Data\Entities\Shift.cs" />
+    <Compile Include="Data\Entities\Holiday.cs" />
     <Compile Include="Services\BackfillService.cs" />
     <Compile Include="Services\LoggingSetup.cs" />
     <Compile Include="ViewModels\ObservableObject.cs" />
