@@ -59,7 +59,9 @@
                       ToolTip="Payroll: when checked, overtime pay is added to net pay." />
             <Button x:Name="RunButton" Content="Run" Width="80" Height="28" Margin="0,0,8,6" Click="RunButton_Click" />
             <Button x:Name="ExportButton" Content="Export to Excel" Width="120" Height="28" Margin="0,0,8,6" Click="ExportButton_Click" IsEnabled="False" />
-            <Button x:Name="ExportPdfButton" Content="Export to PDF" Width="110" Height="28" Margin="0,0,0,6" Click="ExportPdfButton_Click" IsEnabled="False" />
+            <Button x:Name="ExportPdfButton" Content="Export to PDF" Width="110" Height="28" Margin="0,0,8,6" Click="ExportPdfButton_Click" IsEnabled="False" />
+            <Button x:Name="SalarySlipButton" Content="Salary Slips (PDF)" Width="130" Height="28" Margin="0,0,0,6" Click="SalarySlipButton_Click"
+                    ToolTip="One printable slip per employee for the selected period/filter." />
         </WrapPanel>
 
         <TextBlock Grid.Row="1" x:Name="Summary" Foreground="Gray" Margin="0,0,0,8" />

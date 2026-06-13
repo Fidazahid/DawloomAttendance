@@ -81,5 +81,88 @@ namespace DawloomAttendance.Services
             renderer.RenderDocument();
             renderer.PdfDocument.Save(path);
         }
+
+        /// <summary>Renders one salary-slip page per employee.</summary>
+        public static void WriteSalarySlips(string path, string period, IEnumerable<SalarySlip> slips)
+        {
+            var doc = new Document();
+            doc.DefaultPageSetup.PageFormat = PageFormat.A4;
+            doc.DefaultPageSetup.TopMargin = Unit.FromCentimeter(1.8);
+            doc.DefaultPageSetup.LeftMargin = Unit.FromCentimeter(2);
+            doc.DefaultPageSetup.RightMargin = Unit.FromCentimeter(2);
+
+            var headerColor = new Color(45, 62, 80);
+
+            foreach (var s in slips)
+            {
+                var section = doc.AddSection();   // new page per employee
+
+                var title = section.AddParagraph("SALARY SLIP");
+                title.Format.Alignment = ParagraphAlignment.Center;
+                title.Format.Font.Size = 18; title.Format.Font.Bold = true; title.Format.Font.Color = headerColor;
+                var sub = section.AddParagraph("Dawloom Attendance    •    " + period);
+                sub.Format.Alignment = ParagraphAlignment.Center;
+                sub.Format.Font.Size = 9; sub.Format.Font.Color = Colors.Gray;
+                sub.Format.SpaceAfter = Unit.FromCentimeter(0.4);
+
+                AddGroup(section, headerColor, "Employee", new[]
+                {
+                    Pair("Name", s.Name), Pair("Enroll #", s.Enroll), Pair("CNIC", s.Cnic),
+                    Pair("Department", s.Department), Pair("Designation", s.Designation), Pair("Shift", s.Shift),
+                });
+                AddGroup(section, headerColor, "Attendance", new[]
+                {
+                    Pair("Working days", s.WorkingDays.ToString()),
+                    Pair("Present", s.Present.ToString()),
+                    Pair("Absent", s.Absent.ToString()),
+                    Pair("Leave / Holiday", s.LeaveDays.ToString()),
+                    Pair("Late count", s.LateCount.ToString()),
+                    Pair("Late time", DurationFormat.Minutes(s.LateMinutes)),
+                    Pair("Worked", DurationFormat.Hours(s.WorkedHours)),
+                    Pair("Overtime", DurationFormat.Hours(s.OvertimeHours)),
+                    Pair("Late deduction (days)", s.LateDeductionDays.ToString("0.##")),
+                    Pair("Payable days", s.PayableDays.ToString("0.##")),
+                });
+                AddGroup(section, headerColor, "Earnings (Rs.)", new[]
+                {
+                    Pair("Monthly salary", s.Salary.ToString("0")),
+                    Pair("Daily rate", s.DailyRate.ToString("0")),
+                    Pair("Base pay (payable days)", s.BasePay.ToString("0")),
+                    Pair("Overtime pay" + (s.IncludeOvertime ? "" : " (excluded)"), s.OvertimePay.ToString("0")),
+                });
+
+                var net = section.AddParagraph();
+                net.Format.SpaceBefore = Unit.FromCentimeter(0.3);
+                net.AddFormattedText("Net pay:   Rs. " + s.NetPay.ToString("0"),
+                    new Font { Size = 15, Bold = true, Color = headerColor });
+            }
+
+            var renderer = new PdfDocumentRenderer(true) { Document = doc };
+            renderer.RenderDocument();
+            renderer.PdfDocument.Save(path);
+        }
+
+        private static KeyValuePair<string, string> Pair(string k, string v)
+            => new KeyValuePair<string, string>(k, v ?? "");
+
+        private static void AddGroup(Section section, Color headerColor, string heading, IEnumerable<KeyValuePair<string, string>> rows)
+        {
+            var h = section.AddParagraph(heading);
+            h.Format.Font.Bold = true; h.Format.Font.Size = 11; h.Format.Font.Color = headerColor;
+            h.Format.SpaceBefore = Unit.FromCentimeter(0.25);
+            h.Format.SpaceAfter = Unit.FromCentimeter(0.1);
+
+            var table = section.AddTable();
+            table.Borders.Width = 0;
+            table.AddColumn(Unit.FromCentimeter(6));
+            table.AddColumn(Unit.FromCentimeter(9));
+            foreach (var kv in rows)
+            {
+                var r = table.AddRow();
+                var l = r.Cells[0].AddParagraph(kv.Key);
+                l.Format.Font.Color = Colors.Gray;
+                r.Cells[1].AddParagraph(kv.Value ?? "");
+            }
+        }
     }
 }

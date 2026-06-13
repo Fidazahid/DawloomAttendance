@@ -76,20 +76,26 @@ namespace DawloomAttendance.Views
             }
         }
 
-        private void RunButton_Click(object sender, RoutedEventArgs e)
+        // Reads the period + employee filter and computes attendance for the range.
+        // Returns false (after warning) if the date range is invalid.
+        private bool GatherData(out DateTime from, out DateTime to,
+            out Dictionary<string, Data.Entities.Employee> names,
+            out Dictionary<string, Data.Entities.Shift> shiftByEnroll,
+            out List<DailyAttendance> data)
         {
-            var from = FromPick.SelectedDate ?? DateTime.Today;
-            var to = ToPick.SelectedDate ?? DateTime.Today;
-            if (to < from) { MessageBox.Show(Window.GetWindow(this), "‘To’ must be on or after ‘From’.", "Reports", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            from = FromPick.SelectedDate ?? DateTime.Today;
+            to = ToPick.SelectedDate ?? DateTime.Today;
+            names = _db.GetEmployees().ToDictionary(x => x.EnrollNumber);
+            shiftByEnroll = new Dictionary<string, Data.Entities.Shift>();
+            data = null;
+            if (to < from) { MessageBox.Show(Window.GetWindow(this), "‘To’ must be on or after ‘From’.", "Reports", MessageBoxButton.OK, MessageBoxImage.Warning); return false; }
 
-            var names = _db.GetEmployees().ToDictionary(x => x.EnrollNumber);
             var shifts = _db.GetShifts().ToDictionary(s => s.Id);
-            var shiftByEnroll = new Dictionary<string, Data.Entities.Shift>();
             foreach (var emp in names.Values)
                 shiftByEnroll[emp.EnrollNumber] =
                     (emp.ShiftId.HasValue && shifts.TryGetValue(emp.ShiftId.Value, out var sh)) ? sh : null;
 
-            var data = new AttendanceService(_db).ComputeForRange(from, to);
+            var all = new AttendanceService(_db).ComputeForRange(from, to);
 
             // Optional multi-employee filter: none checked = all; some checked = only those.
             var selected = (EmployeeList.ItemsSource as IEnumerable<EmpPick>)
@@ -97,15 +103,29 @@ namespace DawloomAttendance.Views
             if (selected.Count > 0)
             {
                 var set = new HashSet<string>(selected);
-                data = data.Where(d => set.Contains(d.EnrollNumber)).ToList();
+                all = all.Where(d => set.Contains(d.EnrollNumber)).ToList();
             }
+            data = all;
+            return true;
+        }
 
-            if (!int.TryParse(LatesPerDeductionBox.Text, out var latesPerDed) || latesPerDed < 1) latesPerDed = 3;
-            _db.SetSetting("LatesPerDeduction", latesPerDed.ToString());
+        private int LatesPerDeduction()
+        {
+            if (!int.TryParse(LatesPerDeductionBox.Text, out var n) || n < 1) n = 3;
+            _db.SetSetting("LatesPerDeduction", n.ToString());
+            return n;
+        }
+
+        private void RunButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!GatherData(out var from, out var to, out var names, out var shiftByEnroll, out var data)) return;
+            int latesPerDed = LatesPerDeduction();
 
             switch (SelectedType)
             {
-                case "Payroll (monthly)": _current = Payroll(data, names, shiftByEnroll, latesPerDed, IncludeOtBox.IsChecked == true); _reportName = "Payroll"; break;
+                case "Payroll (monthly)":
+                    _current = PayrollTable(PayrollCalculator.Compute(data, names, shiftByEnroll, latesPerDed, IncludeOtBox.IsChecked == true));
+                    _reportName = "Payroll"; break;
                 case "Daily detail": _current = DailyDetail(data, names, shiftByEnroll); _reportName = "Daily detail"; break;
                 case "Late arrivals": _current = LateList(data, names); _reportName = "Late arrivals"; break;
                 case "Absentees": _current = AbsentList(data, names); _reportName = "Absentees"; break;
@@ -128,8 +148,7 @@ namespace DawloomAttendance.Views
             => names.TryGetValue(enroll, out var emp) ? emp.Designation : "";
 
         // Payroll-ready monthly metrics per employee (feed into a payroll system).
-        private static DataTable Payroll(List<DailyAttendance> data, IDictionary<string, Data.Entities.Employee> names,
-            IDictionary<string, Data.Entities.Shift> shiftByEnroll, int latesPerDeduction, bool includeOvertime)
+        private static DataTable PayrollTable(System.Collections.Generic.List<SalarySlip> slips)
         {
             var t = new DataTable();
             t.Columns.Add("Enroll"); t.Columns.Add("Name"); t.Columns.Add("CNIC");
@@ -140,45 +159,19 @@ namespace DawloomAttendance.Views
             t.Columns.Add("Late deduction (days)"); t.Columns.Add("Payable days");
             t.Columns.Add("Salary"); t.Columns.Add("Overtime pay"); t.Columns.Add("Net pay");
 
-            foreach (var g in data.GroupBy(d => d.EnrollNumber).OrderBy(g => SortKey(g.Key)))
+            foreach (var s in slips)
             {
-                names.TryGetValue(g.Key, out var emp);
-                shiftByEnroll.TryGetValue(g.Key, out var shift);
-                double salary = emp?.Salary ?? 0;
-                double shiftHours = ShiftHours(shift);
-
-                int workingDays = g.Count(x => x.IsWorkingDay);
-                int present = g.Count(x => x.Present);
-                int absent = g.Count(x => x.Absent);
-                int lateCount = g.Count(x => x.Late);
-                int leaveDays = g.Count(x => x.Category == DayCategory.Off &&
-                    !string.IsNullOrEmpty(x.OffReason) && x.OffReason != "Weekend");
-                double otHours = g.Sum(x => x.OvertimeHours);
-
-                // Configurable rule: every N late arrivals = one day's deduction.
-                double lateDeductionDays = latesPerDeduction > 0 ? (double)lateCount / latesPerDeduction : 0;
-                double payableDays = present - lateDeductionDays;
-                if (payableDays < 0) payableDays = 0;
-
-                // Money: daily rate from salary / working days; OT paid at the hourly rate.
-                double dailyRate = workingDays > 0 ? salary / workingDays : 0;
-                double basePay = payableDays * dailyRate;
-                double hourlyRate = shiftHours > 0 ? dailyRate / shiftHours : 0;
-                double otPay = otHours * hourlyRate;
-                double netPay = basePay + (includeOvertime ? otPay : 0);
-
                 t.Rows.Add(
-                    g.Key, Nm(names, g.Key), Cnic(names, g.Key), Dept(names, g.Key), Desig(names, g.Key),
-                    ShiftDisplay(shift),
-                    workingDays, present, absent, leaveDays, lateCount,
-                    DurationFormat.Minutes(g.Where(x => x.Late).Sum(x => x.LateMinutes)),
-                    DurationFormat.Hours(g.Sum(x => x.WorkedHours)),
-                    DurationFormat.Hours(otHours),
-                    lateDeductionDays.ToString("0.##"),
-                    payableDays.ToString("0.##"),
-                    salary.ToString("0"),
-                    otPay.ToString("0"),
-                    netPay.ToString("0"));
+                    s.Enroll, s.Name, s.Cnic, s.Department, s.Designation, s.Shift,
+                    s.WorkingDays, s.Present, s.Absent, s.LeaveDays, s.LateCount,
+                    DurationFormat.Minutes(s.LateMinutes),
+                    DurationFormat.Hours(s.WorkedHours),
+                    DurationFormat.Hours(s.OvertimeHours),
+                    s.LateDeductionDays.ToString("0.##"),
+                    s.PayableDays.ToString("0.##"),
+                    s.Salary.ToString("0"),
+                    s.OvertimePay.ToString("0"),
+                    s.NetPay.ToString("0"));
             }
             return t;
         }
@@ -246,18 +239,7 @@ namespace DawloomAttendance.Views
             return t;
         }
 
-        private static double ShiftHours(Data.Entities.Shift s)
-        {
-            if (s == null) return 0;
-            if (TimeSpan.TryParseExact(s.StartTime, @"hh\:mm", CultureInfo.InvariantCulture, out var st) &&
-                TimeSpan.TryParseExact(s.EndTime, @"hh\:mm", CultureInfo.InvariantCulture, out var en))
-            {
-                double h = (en - st).TotalHours;
-                if (h <= 0) h += 24; // overnight shift
-                return h;
-            }
-            return 0;
-        }
+        private static double ShiftHours(Data.Entities.Shift s) => PayrollCalculator.ShiftHours(s);
 
         private static string ShiftDisplay(Data.Entities.Shift s)
             => s == null ? "—" : $"{s.Name} ({s.StartTime}-{s.EndTime})";
@@ -329,6 +311,32 @@ namespace DawloomAttendance.Views
             catch (Exception ex)
             {
                 MessageBox.Show(Window.GetWindow(this), "PDF export failed: " + ex.Message, "Export", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SalarySlipButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!GatherData(out var from, out var to, out var names, out var shiftByEnroll, out var data)) return;
+            var slips = PayrollCalculator.Compute(data, names, shiftByEnroll, LatesPerDeduction(), IncludeOtBox.IsChecked == true);
+            if (slips.Count == 0)
+            {
+                MessageBox.Show(Window.GetWindow(this), "No employees to generate slips for.", "Salary Slips", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "PDF (*.pdf)|*.pdf",
+                FileName = $"Dawloom_SalarySlips_{DateTime.Now:yyyyMMdd}.pdf"
+            };
+            if (dlg.ShowDialog() != true) return;
+            try
+            {
+                PdfExport.WriteSalarySlips(dlg.FileName, $"{from:yyyy-MM-dd} to {to:yyyy-MM-dd}", slips);
+                System.Diagnostics.Process.Start(dlg.FileName);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Window.GetWindow(this), "Slip export failed: " + ex.Message, "Salary Slips", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }

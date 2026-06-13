@@ -6,22 +6,62 @@ Source proposal: `Attendance_System_Proposal.docx` (ATT-2026-001).
 
 ---
 
+## Build Status (last updated: 2026-06-13)
+
+Legend: ✅ Done · 🟡 In progress · ⬜ Pending
+
+Validated end-to-end against the live ZKTeco **K70 at 192.168.18.200** (comm key 2525):
+real connect, live punch capture, backfill of 1004+ records, attendance calc, reports.
+
+### ✅ Done
+- **Phase 1 — Connection:** SDK registered + committed under `lib/zkteco`; x86 build; late-bound
+  fallback + typed interop (`/p:ZkSdk=true`); live `OnAttTransactionEx` capture on a dedicated STA
+  thread; SQLite persistence (`System.Data.SQLite`) with dedup; backfill (manual + auto-on-connect);
+  auto-reconnect + keep-alive monitor; device-time sync; Serilog file log + `DeviceLog` table; settings.
+- **Phase 2 — Employees/Shifts/Holidays:** employee CRUD + "Import from Device"; shift templates +
+  per-employee assignment; holiday calendar (dated, yearly-recurring, **weekly off-days scoped by month**,
+  per-employee leave with reason); two-way device sync (push/remove user). *(Excel bulk import skipped.)*
+- **Phase 3 — Calculation engine:** pure `AttendanceCalculator` (first/last punch, late+grace, early,
+  worked hours, overtime, half/full/absent/off) with unit tests; attendance viewer (Check-In/Out columns);
+  manual punch correction (add missed punch, delete, convert in/out) from Dashboard & Attendance.
+- **Phase 4 — Live dashboard:** single-window **sidebar shell**; auto-connect on startup; tiles
+  (Total/Present/Absent/Late/In-Office), search + filter, live updates.
+- **Phase 5 — Reports & exports:** Monthly summary (ranked by %), Daily detail, Late, Absentee; period
+  presets; multi-select employee dropdown; **Excel (ClosedXML)** + **PDF (PDFsharp/MigraDoc)** export that
+  auto-opens; durations shown as `Xh Ym`; per-employee leave shows "Off — reason".
+- **Phase 6 (partial):** automated **daily backup + restore** (VACUUM INTO, retention, configurable folder);
+  **payroll export** (salary, daily rate, late-deduction rule, overtime toggle, net pay) + **per-employee
+  salary slips PDF**.
+
+### 🟡 In progress / decisions
+- **Stack:** staying on **.NET Framework 4.7.2 / x86** (validated). Migration to **.NET 8 + MVVM**
+  is deferred until later (see Open Decision); SDK rules are runtime-agnostic.
+
+### ⬜ Pending
+- **Phase 5:** email notifications (late alerts, end-of-day summary, SMTP); WhatsApp add-on; leave
+  balances/types (annual/sick/casual/unpaid) — only per-day leave entries exist so far.
+- **Phase 6:** role-based access (Admin/HR/Manager); audit log of changes.
+- **Phase 7:** single-file installer (Inno Setup/Velopack); User Manual + Admin Guide PDFs; training; handover.
+- **Optional:** Excel bulk employee import; .NET 8 + MVVM migration.
+
+---
+
 ## Project Snapshot (current state)
 
 - Project: `DawloomAttendance.csproj`
 - Type: WPF Desktop Application
-- **Current target: .NET Framework 4.7.2** (proposal mentions .NET 8 — decision needed before Phase 1, see "Open Decision" below)
-- UI: empty `MainWindow.xaml` shell
+- **Target: .NET Framework 4.7.2 / x86** (decision resolved — see below)
+- UI: single-window **sidebar shell** (Connection, Dashboard, Employees, Holidays, Attendance, Reports, Backup)
 - Solution: `DawloomAttendance.sln`
+- SDK: `zkemkeeper.dll` registered; DLLs + generated `Interop.zkemkeeper.dll` committed under `lib/zkteco`
 
-### Open Decision Before Starting
+### Resolved Decision (was: .NET 8 vs 4.7.2)
 
-The proposal specifies .NET 8, but the existing `.csproj` targets .NET Framework 4.7.2. The ZKTeco SDK (`zkemkeeper.dll`) is a 32-bit ActiveX COM component, and both runtimes can interop with it as long as the process runs as **x86**. Recommendation:
-
-- **Stay on .NET Framework 4.7.2** if speed-to-MVP matters and the office PC is fixed (lowest interop friction with `zkemkeeper.dll`).
-- **Migrate to .NET 8 (WPF)** to match the proposal — still works with the COM SDK via `Interop.zkemkeeper.dll`, but requires a one-time platform retarget and verifying x86 build configuration.
-
-Either way, Phase 1 below works the same — the only change is project file format.
+The proposal specified .NET 8 but the project was on .NET Framework 4.7.2. **Decision: stay on
+4.7.2 / x86** for lowest interop friction with the 32-bit `zkemkeeper` COM SDK and fastest delivery;
+this is validated working against the live device. A **.NET 8 + MVVM migration remains optional/deferred**
+— the integration is proven, so the migration (if done) is low-risk later. The SDK rules
+(`.github/copilot-instructions.md`) apply to either runtime.
 
 ---
 

@@ -221,6 +221,8 @@
     <Compile Include="Services\ExcelExport.cs" />
     <Compile Include="Services\PdfExport.cs" />
     <Compile Include="Services\BackupService.cs" />
+    <Compile Include="Services\SalarySlip.cs" />
+    <Compile Include="Services\PayrollCalculator.cs" />
     <Compile Include="Services\DurationFormat.cs" />
     <Compile Include="ViewModels\ObservableObject.cs" />
     <Compile Include="ViewModels\RelayCommand.cs" />
