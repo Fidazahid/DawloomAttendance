@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.SQLite;
 using System.IO;
+using System.Linq;
 using DawloomAttendance.Data.Entities;
 
 namespace DawloomAttendance.Data
@@ -110,8 +111,16 @@ CREATE TABLE IF NOT EXISTS Holiday (
 CREATE TABLE IF NOT EXISTS Setting (
     Key   TEXT PRIMARY KEY,
     Value TEXT
+);
+
+CREATE TABLE IF NOT EXISTS WeeklyOff (
+    Month     INTEGER NOT NULL,   -- 0 = whole year, 1-12 = specific month
+    DayOfWeek INTEGER NOT NULL,   -- 0=Sun … 6=Sat
+    PRIMARY KEY (Month, DayOfWeek)
 );";
                 cmd.ExecuteNonQuery();
+
+                MigrateWeeklyOff(conn);
             }
         }
 
@@ -438,10 +447,11 @@ UPDATE Shift SET Name=$name, StartTime=$start, EndTime=$end, GraceMinutes=$grace
         /// an exact-dated holiday, or a recurring month/day holiday.
         /// </summary>
         public bool IsHoliday(DateTime date)
-        {
-            if (GetWeeklyOffDays().Contains((int)date.DayOfWeek))
-                return true;
+            => ResolveWeeklyOffDays(date).Contains((int)date.DayOfWeek) || IsDatedHoliday(date);
 
+        /// <summary>True only for a dated/recurring holiday in the Holiday table (ignores weekly off-days).</summary>
+        public bool IsDatedHoliday(DateTime date)
+        {
             using (var conn = Open())
             using (var cmd = conn.CreateCommand())
             {
@@ -454,6 +464,98 @@ WHERE (Recurring = 0 AND Date = $exact)
                 cmd.Parameters.AddWithValue("$md", date.ToString("MM-dd"));
                 return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
             }
+        }
+
+        /// <summary>Punches for one employee on one date (for review/correction).</summary>
+        public IReadOnlyList<RawPunch> GetPunchesForEmployeeDate(string enrollNumber, DateTime date)
+        {
+            var list = new List<RawPunch>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+SELECT Id, EnrollNumber, Timestamp, AttState, VerifyMethod, WorkCode, IsValid, CapturedAt, Source
+FROM RawPunch WHERE EnrollNumber = $e AND substr(Timestamp, 1, 10) = $d ORDER BY Timestamp;";
+                cmd.Parameters.AddWithValue("$e", enrollNumber ?? string.Empty);
+                cmd.Parameters.AddWithValue("$d", date.ToString(DateFormat));
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        list.Add(new RawPunch
+                        {
+                            Id = r.GetInt64(0),
+                            EnrollNumber = r.GetString(1),
+                            Timestamp = ParseTime(r.GetString(2)),
+                            AttState = r.GetInt32(3),
+                            VerifyMethod = r.GetInt32(4),
+                            WorkCode = r.GetInt32(5),
+                            IsValid = r.GetInt32(6) != 0,
+                            CapturedAt = ParseTime(r.GetString(7)),
+                            Source = r.GetString(8)
+                        });
+                    }
+                }
+            }
+            return list;
+        }
+
+        /// <summary>Deletes a single raw punch (e.g. an accidental duplicate scan).</summary>
+        public void DeletePunch(long id)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "DELETE FROM RawPunch WHERE Id=$id;";
+                cmd.Parameters.AddWithValue("$id", id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>Corrects a punch's in/out type (e.g. a stray second check-in → check-out).</summary>
+        public void UpdatePunchState(long id, int attState)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "UPDATE RawPunch SET AttState=$s WHERE Id=$id;";
+                cmd.Parameters.AddWithValue("$s", attState);
+                cmd.Parameters.AddWithValue("$id", id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>All punches whose timestamp falls on the given calendar date.</summary>
+        public IReadOnlyList<RawPunch> GetPunchesForDate(DateTime date)
+        {
+            var list = new List<RawPunch>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+SELECT Id, EnrollNumber, Timestamp, AttState, VerifyMethod, WorkCode, IsValid, CapturedAt, Source
+FROM RawPunch WHERE substr(Timestamp, 1, 10) = $d ORDER BY EnrollNumber, Timestamp;";
+                cmd.Parameters.AddWithValue("$d", date.ToString(DateFormat));
+                using (var r = cmd.ExecuteReader())
+                {
+                    while (r.Read())
+                    {
+                        list.Add(new RawPunch
+                        {
+                            Id = r.GetInt64(0),
+                            EnrollNumber = r.GetString(1),
+                            Timestamp = ParseTime(r.GetString(2)),
+                            AttState = r.GetInt32(3),
+                            VerifyMethod = r.GetInt32(4),
+                            WorkCode = r.GetInt32(5),
+                            IsValid = r.GetInt32(6) != 0,
+                            CapturedAt = ParseTime(r.GetString(7)),
+                            Source = r.GetString(8)
+                        });
+                    }
+                }
+            }
+            return list;
         }
 
         // ---- Settings (key/value) ----------------------------------------------------
@@ -485,20 +587,89 @@ ON CONFLICT(Key) DO UPDATE SET Value=$v;";
             }
         }
 
-        /// <summary>Weekly recurring days off as day numbers (0=Sun … 6=Sat).</summary>
-        public HashSet<int> GetWeeklyOffDays()
+        // Weekly recurring days off (0=Sun … 6=Sat), scoped by month:
+        // Month 0 = whole year; 1-12 = that month only. A month with its own rule
+        // OVERRIDES the whole-year rule for that month.
+
+        /// <summary>Off-days configured for a scope (0 = whole year, 1-12 = month).</summary>
+        public HashSet<int> GetWeeklyOffDays(int month)
         {
             var set = new HashSet<int>();
-            var csv = GetSetting(WeeklyOffKey);
-            if (!string.IsNullOrWhiteSpace(csv))
-                foreach (var tok in csv.Split(','))
-                    if (int.TryParse(tok.Trim(), out var d) && d >= 0 && d <= 6)
-                        set.Add(d);
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT DayOfWeek FROM WeeklyOff WHERE Month=$m;";
+                cmd.Parameters.AddWithValue("$m", month);
+                using (var r = cmd.ExecuteReader())
+                    while (r.Read()) set.Add(r.GetInt32(0));
+            }
             return set;
         }
 
-        public void SetWeeklyOffDays(System.Collections.Generic.IEnumerable<int> days)
-            => SetSetting(WeeklyOffKey, string.Join(",", days));
+        /// <summary>Whole-year off-days (convenience for the common case).</summary>
+        public HashSet<int> GetWeeklyOffDays() => GetWeeklyOffDays(0);
+
+        public void SetWeeklyOffDays(int month, System.Collections.Generic.IEnumerable<int> days)
+        {
+            using (var conn = Open())
+            using (var tx = conn.BeginTransaction())
+            {
+                using (var del = conn.CreateCommand())
+                {
+                    del.CommandText = "DELETE FROM WeeklyOff WHERE Month=$m;";
+                    del.Parameters.AddWithValue("$m", month);
+                    del.ExecuteNonQuery();
+                }
+                foreach (var d in days.Distinct())
+                {
+                    using (var ins = conn.CreateCommand())
+                    {
+                        ins.CommandText = "INSERT INTO WeeklyOff (Month, DayOfWeek) VALUES ($m, $d);";
+                        ins.Parameters.AddWithValue("$m", month);
+                        ins.Parameters.AddWithValue("$d", d);
+                        ins.ExecuteNonQuery();
+                    }
+                }
+                tx.Commit();
+            }
+        }
+
+        /// <summary>Effective off-days for a date: the month's rule if set, else the whole-year rule.</summary>
+        public HashSet<int> ResolveWeeklyOffDays(DateTime date)
+        {
+            var monthRule = GetWeeklyOffDays(date.Month);
+            return monthRule.Count > 0 ? monthRule : GetWeeklyOffDays(0);
+        }
+
+        // One-time migration of the legacy single-CSV setting into the Month=0 scope.
+        private void MigrateWeeklyOff(SQLiteConnection conn)
+        {
+            using (var check = conn.CreateCommand())
+            {
+                check.CommandText = "SELECT COUNT(*) FROM WeeklyOff;";
+                if (Convert.ToInt64(check.ExecuteScalar()) > 0) return;
+            }
+            string csv;
+            using (var get = conn.CreateCommand())
+            {
+                get.CommandText = "SELECT Value FROM Setting WHERE Key=$k;";
+                get.Parameters.AddWithValue("$k", WeeklyOffKey);
+                csv = get.ExecuteScalar() as string;
+            }
+            if (string.IsNullOrWhiteSpace(csv)) return;
+            foreach (var tok in csv.Split(','))
+            {
+                if (int.TryParse(tok.Trim(), out var d) && d >= 0 && d <= 6)
+                {
+                    using (var ins = conn.CreateCommand())
+                    {
+                        ins.CommandText = "INSERT OR IGNORE INTO WeeklyOff (Month, DayOfWeek) VALUES (0, $d);";
+                        ins.Parameters.AddWithValue("$d", d);
+                        ins.ExecuteNonQuery();
+                    }
+                }
+            }
+        }
 
         private static void BindHoliday(SQLiteCommand cmd, Holiday h)
         {

@@ -7,6 +7,10 @@ namespace DawloomAttendance.Device
     public interface IZkDevice : IDisposable
     {
         DeviceConnectionState State { get; }
+
+        /// <summary>Human-readable detail of the last operation (e.g. the connect failure reason).</summary>
+        string LastMessage { get; }
+
         event Action<DeviceConnectionState> StateChanged;
         event Action<PunchEvent> PunchReceived;
 

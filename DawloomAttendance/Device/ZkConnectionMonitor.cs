@@ -90,8 +90,9 @@ namespace DawloomAttendance.Device
 
                 if (!connected)
                 {
-                    Log?.Invoke("Warn", "ReconnectPending",
-                        $"connect failed — retrying in {_settings.ReconnectIntervalSeconds}s");
+                    string reason = string.IsNullOrWhiteSpace(_device.LastMessage) ? "connect failed" : _device.LastMessage;
+                    Log?.Invoke("Error", "ConnectFailed",
+                        $"{reason} (retrying in {_settings.ReconnectIntervalSeconds}s)");
                     await DelaySeconds(_settings.ReconnectIntervalSeconds, ct).ConfigureAwait(false);
                     continue;
                 }

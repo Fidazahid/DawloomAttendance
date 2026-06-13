@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using DawloomAttendance.Data;
@@ -12,12 +14,27 @@ namespace DawloomAttendance.Views
     {
         private readonly AppDb _db;
         private ObservableCollection<Holiday> _holidays;
+        private bool _loadingScope;
+        private int _currentScope;   // 0 = whole year, 1-12 = month
 
         public HolidaysWindow(AppDb db)
         {
             InitializeComponent();
             _db = db;
+            InitScopeCombo();
             Reload();
+        }
+
+        private void InitScopeCombo()
+        {
+            var options = new List<ScopeOption> { new ScopeOption { Month = 0, Label = "Whole year" } };
+            for (int m = 1; m <= 12; m++)
+                options.Add(new ScopeOption { Month = m, Label = CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(m) });
+            ScopeCombo.ItemsSource = options;
+            _currentScope = 0;
+            _loadingScope = true;
+            ScopeCombo.SelectedValue = 0;
+            _loadingScope = false;
         }
 
         private void Reload()
@@ -25,6 +42,26 @@ namespace DawloomAttendance.Views
             _holidays = new ObservableCollection<Holiday>(_db.GetHolidays());
             Grid.ItemsSource = _holidays;
             LoadWeeklyOff();
+        }
+
+        private void ScopeCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (_loadingScope) return;
+            SaveCurrentScope();                          // persist the scope we're leaving
+            _currentScope = (int)ScopeCombo.SelectedValue;
+            LoadWeeklyOff();                             // load the scope we're entering
+        }
+
+        private void SaveCurrentScope()
+        {
+            var offDays = WeekBoxes.Where(w => w.box.IsChecked == true).Select(w => w.day);
+            _db.SetWeeklyOffDays(_currentScope, offDays);
+        }
+
+        private class ScopeOption
+        {
+            public int Month { get; set; }
+            public string Label { get; set; }
         }
 
         // (CheckBox, day-of-week number) pairs; 0=Sun … 6=Sat.
@@ -37,7 +74,7 @@ namespace DawloomAttendance.Views
 
         private void LoadWeeklyOff()
         {
-            var off = _db.GetWeeklyOffDays();
+            var off = _db.GetWeeklyOffDays(_currentScope);
             foreach (var (box, day) in WeekBoxes)
                 box.IsChecked = off.Contains(day);
         }
@@ -78,8 +115,7 @@ namespace DawloomAttendance.Views
                     else _db.UpdateHoliday(h);
                 }
 
-                var offDays = WeekBoxes.Where(w => w.box.IsChecked == true).Select(w => w.day);
-                _db.SetWeeklyOffDays(offDays);
+                SaveCurrentScope();
 
                 MessageBox.Show(this, "Holidays saved.", "Save", MessageBoxButton.OK, MessageBoxImage.Information);
             }

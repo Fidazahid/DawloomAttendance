@@ -16,17 +16,23 @@
 
         <!-- Connection status + navigation -->
         <Grid Grid.Row="0" Margin="0,0,0,12">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-                <Ellipse x:Name="StatusDot" Width="16" Height="16" Fill="Gray"
-                         VerticalAlignment="Center" />
-                <TextBlock x:Name="StatusText" Text="Disconnected" Margin="8,0,0,0"
-                           VerticalAlignment="Center" FontSize="16" FontWeight="SemiBold" />
+            <StackPanel HorizontalAlignment="Left">
+                <StackPanel Orientation="Horizontal">
+                    <Ellipse x:Name="StatusDot" Width="16" Height="16" Fill="Gray"
+                             VerticalAlignment="Center" />
+                    <TextBlock x:Name="StatusText" Text="Disconnected" Margin="8,0,0,0"
+                               VerticalAlignment="Center" FontSize="16" FontWeight="SemiBold" />
+                </StackPanel>
+                <TextBlock x:Name="StatusDetail" Margin="24,2,0,0" Foreground="Gray"
+                           TextWrapping="Wrap" MaxWidth="560" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="EmployeesButton" Content="Employees…" Width="110" Height="30" Margin="0,0,8,0"
                         Click="EmployeesButton_Click" />
-                <Button x:Name="HolidaysButton" Content="Holidays…" Width="100" Height="30"
+                <Button x:Name="HolidaysButton" Content="Holidays…" Width="100" Height="30" Margin="0,0,8,0"
                         Click="HolidaysButton_Click" />
+                <Button x:Name="AttendanceButton" Content="Attendance…" Width="110" Height="30"
+                        Click="AttendanceButton_Click" />
             </StackPanel>
         </Grid>
 

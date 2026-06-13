@@ -128,6 +128,14 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Views\AttendanceWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\PunchEditWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -152,6 +160,14 @@
       <DependentUpon>Views\HolidaysWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Views\AttendanceWindow.xaml.cs">
+      <DependentUpon>Views\AttendanceWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Views\PunchEditWindow.xaml.cs">
+      <DependentUpon>Views\PunchEditWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
     <!-- Connection-test step: only the files needed to connect to the device.
          ZkConnectionMonitor, AppDb, BackfillService, logging, settings UI and
          the view models are added back as their Phase 1 steps land. -->
@@ -170,6 +186,9 @@
     <Compile Include="Data\Entities\Holiday.cs" />
     <Compile Include="Services\BackfillService.cs" />
     <Compile Include="Services\LoggingSetup.cs" />
+    <Compile Include="Services\DailyAttendance.cs" />
+    <Compile Include="Services\AttendanceCalculator.cs" />
+    <Compile Include="Services\AttendanceService.cs" />
     <Compile Include="ViewModels\ObservableObject.cs" />
     <Compile Include="ViewModels\RelayCommand.cs" />
   </ItemGroup>

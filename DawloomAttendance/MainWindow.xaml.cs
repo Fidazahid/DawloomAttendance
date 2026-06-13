@@ -85,6 +85,12 @@ namespace DawloomAttendance
             new Views.HolidaysWindow(_db) { Owner = this }.ShowDialog();
         }
 
+        private void AttendanceButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_db == null) { Log("[FAIL] Database unavailable — cannot open Attendance."); return; }
+            new Views.AttendanceWindow(_db) { Owner = this }.ShowDialog();
+        }
+
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
             var dialog = new Views.SettingsWindow(_settings) { Owner = this };
@@ -285,6 +291,11 @@ namespace DawloomAttendance
             }
             StatusDot.Fill = color;
             StatusText.Text = state.ToString();
+
+            // Surface the real reason (e.g. SDK error / "not registered") next to the status.
+            StatusDetail.Text = _device.LastMessage;
+            StatusDetail.Foreground = state == DeviceConnectionState.Error ? Brushes.Red : Brushes.Gray;
+
             UpdateButtons(state);
         }
 
