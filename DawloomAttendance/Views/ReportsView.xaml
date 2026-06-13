@@ -45,8 +45,9 @@
                 </Popup>
             </Grid>
             <TextBlock Text="Report:" VerticalAlignment="Center" Margin="0,0,6,6" />
-            <ComboBox x:Name="TypeCombo" Width="160" Margin="0,0,12,6">
+            <ComboBox x:Name="TypeCombo" Width="170" Margin="0,0,12,6">
                 <ComboBoxItem Content="Monthly summary" IsSelected="True" />
+                <ComboBoxItem Content="Payroll (monthly)" />
                 <ComboBoxItem Content="Daily detail" />
                 <ComboBoxItem Content="Late arrivals" />
                 <ComboBoxItem Content="Absentees" />

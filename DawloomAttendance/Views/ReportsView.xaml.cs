@@ -99,6 +99,7 @@ namespace DawloomAttendance.Views
 
             switch (SelectedType)
             {
+                case "Payroll (monthly)": _current = Payroll(data, names, shiftByEnroll); _reportName = "Payroll"; break;
                 case "Daily detail": _current = DailyDetail(data, names, shiftByEnroll); _reportName = "Daily detail"; break;
                 case "Late arrivals": _current = LateList(data, names); _reportName = "Late arrivals"; break;
                 case "Absentees": _current = AbsentList(data, names); _reportName = "Absentees"; break;
@@ -115,6 +116,42 @@ namespace DawloomAttendance.Views
             => names.TryGetValue(enroll, out var emp) ? emp.Name : "";
         private static string Dept(IDictionary<string, Data.Entities.Employee> names, string enroll)
             => names.TryGetValue(enroll, out var emp) ? emp.Department : "";
+        private static string Cnic(IDictionary<string, Data.Entities.Employee> names, string enroll)
+            => names.TryGetValue(enroll, out var emp) ? emp.Cnic : "";
+        private static string Desig(IDictionary<string, Data.Entities.Employee> names, string enroll)
+            => names.TryGetValue(enroll, out var emp) ? emp.Designation : "";
+
+        // Payroll-ready monthly metrics per employee (feed into a payroll system).
+        private static DataTable Payroll(List<DailyAttendance> data, IDictionary<string, Data.Entities.Employee> names,
+            IDictionary<string, Data.Entities.Shift> shiftByEnroll)
+        {
+            var t = new DataTable();
+            t.Columns.Add("Enroll"); t.Columns.Add("Name"); t.Columns.Add("CNIC");
+            t.Columns.Add("Department"); t.Columns.Add("Designation"); t.Columns.Add("Shift");
+            t.Columns.Add("Working days"); t.Columns.Add("Present"); t.Columns.Add("Absent");
+            t.Columns.Add("Leave/Holiday"); t.Columns.Add("Late count"); t.Columns.Add("Late time");
+            t.Columns.Add("Worked"); t.Columns.Add("Overtime");
+
+            foreach (var g in data.GroupBy(d => d.EnrollNumber).OrderBy(g => SortKey(g.Key)))
+            {
+                shiftByEnroll.TryGetValue(g.Key, out var shift);
+                int leaveDays = g.Count(x => x.Category == DayCategory.Off &&
+                    !string.IsNullOrEmpty(x.OffReason) && x.OffReason != "Weekend");
+
+                t.Rows.Add(
+                    g.Key, Nm(names, g.Key), Cnic(names, g.Key), Dept(names, g.Key), Desig(names, g.Key),
+                    ShiftDisplay(shift),
+                    g.Count(x => x.IsWorkingDay),
+                    g.Count(x => x.Present),
+                    g.Count(x => x.Absent),
+                    leaveDays,
+                    g.Count(x => x.Late),
+                    DurationFormat.Minutes(g.Where(x => x.Late).Sum(x => x.LateMinutes)),
+                    DurationFormat.Hours(g.Sum(x => x.WorkedHours)),
+                    DurationFormat.Hours(g.Sum(x => x.OvertimeHours)));
+            }
+            return t;
+        }
 
         private static DataTable MonthlySummary(List<DailyAttendance> data, IDictionary<string, Data.Entities.Employee> names,
             IDictionary<string, Data.Entities.Shift> shiftByEnroll)
