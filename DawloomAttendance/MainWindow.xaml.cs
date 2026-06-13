@@ -23,6 +23,7 @@ namespace DawloomAttendance
         private AppDb _db;
         private DeviceSettings _settings;       // current device target, edited via the Settings dialog
         private int _machineNumber = 1;         // captured when the monitor starts (avoids UI access off-thread)
+        private bool _connectErrorShown;        // so we pop the error dialog once per connect attempt, not every retry
 
         public MainWindow()
         {
@@ -48,6 +49,9 @@ namespace DawloomAttendance
                 : "ZKTeco SDK is NOT registered. TCP Probe still works; install the SDK for a full connect.");
 
             Closed += (_, __) => { _monitor.Dispose(); _device.Dispose(); };   // stop loop, disconnect, end COM thread
+
+            // Auto-connect once the window is shown (so the error dialog has an owner).
+            Loaded += (_, __) => StartConnection();
         }
 
         private void InitDatabase()
@@ -72,23 +76,46 @@ namespace DawloomAttendance
                 FeedList.Items.Add(FormatPunch(p.Timestamp, p.EnrollNumber, p.AttState, p.VerifyMethod));
         }
 
-        private void EmployeesButton_Click(object sender, RoutedEventArgs e)
+        // ---- Sidebar navigation (swaps content in place) -----------------------------
+
+        private void NavConnection_Click(object sender, RoutedEventArgs e) => ShowHome();
+
+        private void NavDashboard_Click(object sender, RoutedEventArgs e)
         {
-            if (_db == null) { Log("[FAIL] Database unavailable — cannot open Employees."); return; }
-            var win = new Views.EmployeesWindow(_db, _device, _settings.MachineNumber) { Owner = this };
-            win.ShowDialog();
+            if (_db == null) { Log("[FAIL] Database unavailable."); return; }
+            ShowPage(new Views.DashboardWindow(_db, _device));
         }
 
-        private void HolidaysButton_Click(object sender, RoutedEventArgs e)
+        private void NavEmployees_Click(object sender, RoutedEventArgs e)
         {
-            if (_db == null) { Log("[FAIL] Database unavailable — cannot open Holidays."); return; }
-            new Views.HolidaysWindow(_db) { Owner = this }.ShowDialog();
+            if (_db == null) { Log("[FAIL] Database unavailable."); return; }
+            ShowPage(new Views.EmployeesWindow(_db, _device, _settings.MachineNumber));
         }
 
-        private void AttendanceButton_Click(object sender, RoutedEventArgs e)
+        private void NavHolidays_Click(object sender, RoutedEventArgs e)
         {
-            if (_db == null) { Log("[FAIL] Database unavailable — cannot open Attendance."); return; }
-            new Views.AttendanceWindow(_db) { Owner = this }.ShowDialog();
+            if (_db == null) { Log("[FAIL] Database unavailable."); return; }
+            ShowPage(new Views.HolidaysWindow(_db));
+        }
+
+        private void NavAttendance_Click(object sender, RoutedEventArgs e)
+        {
+            if (_db == null) { Log("[FAIL] Database unavailable."); return; }
+            ShowPage(new Views.AttendanceWindow(_db));
+        }
+
+        private void ShowHome()
+        {
+            PageHost.Content = null;
+            PageHost.Visibility = Visibility.Collapsed;
+            HomePanel.Visibility = Visibility.Visible;
+        }
+
+        private void ShowPage(System.Windows.Controls.UserControl view)
+        {
+            HomePanel.Visibility = Visibility.Collapsed;
+            PageHost.Content = view;            // replacing Content unloads the previous view
+            PageHost.Visibility = Visibility.Visible;
         }
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -144,9 +171,13 @@ namespace DawloomAttendance
             }
         }
 
-        private void ConnectButton_Click(object sender, RoutedEventArgs e)
+        private void ConnectButton_Click(object sender, RoutedEventArgs e) => StartConnection();
+
+        private void StartConnection()
         {
+            if (_monitor.IsRunning) return;
             _machineNumber = _settings.MachineNumber;
+            _connectErrorShown = false;   // allow one error dialog for this attempt
             Log($"Starting auto-reconnect monitor → {_settings.Ip}:{_settings.Port}, machine #{_settings.MachineNumber} " +
                 $"(keep-alive {_settings.KeepAliveIntervalSeconds}s, retry {_settings.ReconnectIntervalSeconds}s) …");
 
@@ -243,6 +274,15 @@ namespace DawloomAttendance
             AppendUi($"[{level}] {@event}: {detail}");
             try { _db?.InsertDeviceLog(level, @event, detail); }
             catch { /* never let diagnostics logging break the app */ }
+
+            // Pop a dialog the first time a connect fails (not on every retry).
+            if (@event == "ConnectFailed" && !_connectErrorShown)
+            {
+                _connectErrorShown = true;
+                Dispatcher.InvokeAsync(() =>
+                    MessageBox.Show(this, detail, "Connection failed",
+                        MessageBoxButton.OK, MessageBoxImage.Error));
+            }
         }
 
         // Runs synchronously on the monitor thread after each successful (re)connect,
@@ -271,6 +311,8 @@ namespace DawloomAttendance
 
         private void OnStateChanged(DeviceConnectionState state)
         {
+            if (state == DeviceConnectionState.Connected) _connectErrorShown = false;   // re-arm for a later drop
+
             string level = state == DeviceConnectionState.Error ? "Error" : "Info";
             Serilog.Log.Write(LoggingSetup.Map(level), "Device state: {State} ({Detail})", state, _device.LastMessage);
             try { _db?.InsertDeviceLog(level, state.ToString(), _device.LastMessage); }

@@ -136,6 +136,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Views\DashboardWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -166,6 +170,10 @@
     </Compile>
     <Compile Include="Views\PunchEditWindow.xaml.cs">
       <DependentUpon>Views\PunchEditWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Views\DashboardWindow.xaml.cs">
+      <DependentUpon>Views\DashboardWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
     <!-- Connection-test step: only the files needed to connect to the device.

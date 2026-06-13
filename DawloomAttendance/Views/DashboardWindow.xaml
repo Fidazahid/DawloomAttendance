@@ -1,0 +1,83 @@
+<UserControl x:Class="DawloomAttendance.Views.DashboardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <Style x:Key="Tile" TargetType="Border">
+            <Setter Property="BorderBrush" Value="#FFDDDDDD" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Setter Property="MinWidth" Value="120" />
+        </Style>
+        <Style x:Key="TileNum" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="26" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+        <Style x:Key="TileLbl" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="Gray" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+            <TextBlock Text="Date:" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <DatePicker x:Name="DatePick" Width="130" Margin="0,0,8,0" SelectedDateChanged="DatePick_Changed" />
+            <Button x:Name="RefreshButton" Content="Refresh" Width="90" Height="28" Click="RefreshButton_Click" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+            <Border Style="{StaticResource Tile}">
+                <StackPanel><TextBlock x:Name="TotalCount" Style="{StaticResource TileNum}" Text="0" /><TextBlock Style="{StaticResource TileLbl}" Text="Total" /></StackPanel>
+            </Border>
+            <Border Style="{StaticResource Tile}" BorderBrush="#FF66BB6A">
+                <StackPanel><TextBlock x:Name="PresentCount" Style="{StaticResource TileNum}" Foreground="#FF388E3C" Text="0" /><TextBlock Style="{StaticResource TileLbl}" Text="Present" /></StackPanel>
+            </Border>
+            <Border Style="{StaticResource Tile}" BorderBrush="#FFEF9A9A">
+                <StackPanel><TextBlock x:Name="AbsentCount" Style="{StaticResource TileNum}" Foreground="#FFD32F2F" Text="0" /><TextBlock Style="{StaticResource TileLbl}" Text="Absent" /></StackPanel>
+            </Border>
+            <Border Style="{StaticResource Tile}" BorderBrush="#FFFFCC80">
+                <StackPanel><TextBlock x:Name="LateCount" Style="{StaticResource TileNum}" Foreground="#FFF57C00" Text="0" /><TextBlock Style="{StaticResource TileLbl}" Text="Late" /></StackPanel>
+            </Border>
+            <Border Style="{StaticResource Tile}" BorderBrush="#FF90CAF9">
+                <StackPanel><TextBlock x:Name="InOfficeCount" Style="{StaticResource TileNum}" Foreground="#FF1976D2" Text="0" /><TextBlock Style="{StaticResource TileLbl}" Text="In Office" /></StackPanel>
+            </Border>
+        </StackPanel>
+
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
+            <TextBlock Text="Search:" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <TextBox x:Name="SearchBox" Width="220" Margin="0,0,12,0" TextChanged="Filter_Changed"
+                     ToolTip="Filter by name, enroll #, CNIC or department." />
+            <TextBlock Text="Show:" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <ComboBox x:Name="FilterCombo" Width="130" SelectionChanged="Filter_Changed">
+                <ComboBoxItem Content="All" IsSelected="True" />
+                <ComboBoxItem Content="Present" />
+                <ComboBoxItem Content="Absent" />
+                <ComboBoxItem Content="Late" />
+                <ComboBoxItem Content="In Office" />
+            </ComboBox>
+        </StackPanel>
+
+        <DataGrid Grid.Row="3" x:Name="Grid" AutoGenerateColumns="False" IsReadOnly="True"
+                  GridLinesVisibility="Horizontal" HeadersVisibility="Column">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Enroll" Binding="{Binding Enroll}" Width="60" />
+                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="160" />
+                <DataGridTextColumn Header="Dept" Binding="{Binding Dept}" Width="130" />
+                <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
+                <DataGridTextColumn Header="Check In" Binding="{Binding In}" Width="90" />
+                <DataGridTextColumn Header="Check Out" Binding="{Binding Out}" Width="90" />
+                <DataGridTextColumn Header="Late (min)" Binding="{Binding Late}" Width="80" />
+                <DataGridTextColumn Header="Worked (h)" Binding="{Binding Worked}" Width="80" />
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</UserControl>

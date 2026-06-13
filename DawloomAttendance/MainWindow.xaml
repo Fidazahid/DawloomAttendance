@@ -5,89 +5,115 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:DawloomAttendance"
         mc:Ignorable="d"
-        Title="Dawloom Attendance — Device Connection Test" Height="560" Width="720">
-    <Grid Margin="16">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
+        Title="Dawloom Attendance" Height="640" Width="1040">
+    <Window.Resources>
+        <Style x:Key="NavButton" TargetType="Button">
+            <Setter Property="Height" Value="40" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="Padding" Value="16,0,0,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="#FFDDDDDD" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="{TemplateBinding Background}">
+                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Left" Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#FF3E3E42" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
 
-        <!-- Connection status + navigation -->
-        <Grid Grid.Row="0" Margin="0,0,0,12">
-            <StackPanel HorizontalAlignment="Left">
-                <StackPanel Orientation="Horizontal">
-                    <Ellipse x:Name="StatusDot" Width="16" Height="16" Fill="Gray"
-                             VerticalAlignment="Center" />
-                    <TextBlock x:Name="StatusText" Text="Disconnected" Margin="8,0,0,0"
-                               VerticalAlignment="Center" FontSize="16" FontWeight="SemiBold" />
-                </StackPanel>
-                <TextBlock x:Name="StatusDetail" Margin="24,2,0,0" Foreground="Gray"
-                           TextWrapping="Wrap" MaxWidth="560" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="EmployeesButton" Content="Employees…" Width="110" Height="30" Margin="0,0,8,0"
-                        Click="EmployeesButton_Click" />
-                <Button x:Name="HolidaysButton" Content="Holidays…" Width="100" Height="30" Margin="0,0,8,0"
-                        Click="HolidaysButton_Click" />
-                <Button x:Name="AttendanceButton" Content="Attendance…" Width="110" Height="30"
-                        Click="AttendanceButton_Click" />
-            </StackPanel>
-        </Grid>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="190" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
-        <!-- Device target summary + Settings dialog launcher -->
-        <GroupBox Grid.Row="1" Header="ZKTeco K70 Connection" Padding="10">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" x:Name="TargetText" VerticalAlignment="Center"
-                           Text="Target: (not configured)" />
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <Button x:Name="SyncTimeButton" Content="Sync Time" Width="90" Height="28" Margin="0,0,8,0"
-                            Click="SyncTimeButton_Click" IsEnabled="False"
-                            ToolTip="Set the device clock to this PC's current time." />
-                    <Button x:Name="SettingsButton" Content="Settings…" Width="90" Height="28"
-                            Click="SettingsButton_Click" />
+        <!-- Sidebar -->
+        <Border Grid.Column="0" Background="#FF2D2D30">
+            <StackPanel Margin="0,14,0,0">
+                <TextBlock Text="Dawloom" Foreground="White" FontSize="20" FontWeight="Bold" Margin="16,0,0,0" />
+                <TextBlock Text="Attendance" Foreground="#FF9E9E9E" Margin="16,0,0,14" />
+
+                <StackPanel Orientation="Horizontal" Margin="16,0,0,4">
+                    <Ellipse x:Name="StatusDot" Width="12" Height="12" Fill="Gray" VerticalAlignment="Center" />
+                    <TextBlock x:Name="StatusText" Text="Disconnected" Foreground="White" Margin="6,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
+                <TextBlock x:Name="StatusDetail" Foreground="#FFFF8A80" TextWrapping="Wrap" FontSize="11" Margin="16,0,12,14" />
+
+                <Button Style="{StaticResource NavButton}" Content="Connection" Click="NavConnection_Click" />
+                <Button Style="{StaticResource NavButton}" Content="Dashboard" Click="NavDashboard_Click" />
+                <Button Style="{StaticResource NavButton}" Content="Employees" Click="NavEmployees_Click" />
+                <Button Style="{StaticResource NavButton}" Content="Holidays" Click="NavHolidays_Click" />
+                <Button Style="{StaticResource NavButton}" Content="Attendance" Click="NavAttendance_Click" />
+            </StackPanel>
+        </Border>
+
+        <!-- Content -->
+        <Grid Grid.Column="1">
+            <!-- Home / Connection panel -->
+            <Grid x:Name="HomePanel" Margin="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <GroupBox Grid.Row="0" Header="ZKTeco K70 Connection" Padding="10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" x:Name="TargetText" VerticalAlignment="Center" Text="Target: (not configured)" />
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <Button x:Name="SyncTimeButton" Content="Sync Time" Width="90" Height="28" Margin="0,0,8,0"
+                                    Click="SyncTimeButton_Click" IsEnabled="False"
+                                    ToolTip="Set the device clock to this PC's current time." />
+                            <Button x:Name="SettingsButton" Content="Settings…" Width="90" Height="28" Click="SettingsButton_Click" />
+                        </StackPanel>
+                    </Grid>
+                </GroupBox>
+
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,12,0,12">
+                    <Button x:Name="ProbeButton" Content="TCP Probe" Width="110" Height="30" Click="ProbeButton_Click" Margin="0,0,8,0"
+                            ToolTip="Check the device answers on IP:port (no SDK required)." />
+                    <Button x:Name="ConnectButton" Content="Connect" Width="110" Height="30" Click="ConnectButton_Click" Margin="0,0,8,0"
+                            ToolTip="Start a self-healing connection: connect, keep-alive ping, auto-reconnect." />
+                    <Button x:Name="DisconnectButton" Content="Disconnect" Width="100" Height="30" Click="DisconnectButton_Click" IsEnabled="False" Margin="0,0,8,0" />
+                    <Button x:Name="BackfillButton" Content="Backfill from Device" Width="150" Height="30" Click="BackfillButton_Click" IsEnabled="False"
+                            ToolTip="Read all transactions stored on the device into the local database (deduped)." />
+                    <TextBlock x:Name="LastBackfillText" Text="Last backfill: never" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="Gray" />
+                </StackPanel>
+
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <GroupBox Grid.Column="0" Header="Live Punch Feed (last 20)" Margin="0,0,8,0">
+                        <ListBox x:Name="FeedList" FontFamily="Consolas" FontSize="12" />
+                    </GroupBox>
+                    <GroupBox Grid.Column="1" Header="Log">
+                        <TextBox x:Name="LogBox" IsReadOnly="True" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12"
+                                 Background="#FF1E1E1E" Foreground="#FFE0E0E0" />
+                    </GroupBox>
+                </Grid>
             </Grid>
-        </GroupBox>
 
-        <!-- Actions -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,12">
-            <Button x:Name="ProbeButton" Content="1. TCP Probe" Width="120" Height="30"
-                    Click="ProbeButton_Click" Margin="0,0,8,0"
-                    ToolTip="Check the device answers on IP:port (no SDK required)." />
-            <Button x:Name="ConnectButton" Content="2. Connect (auto-reconnect)" Width="180" Height="30"
-                    Click="ConnectButton_Click" Margin="0,0,8,0"
-                    ToolTip="Start a self-healing connection: connect, keep-alive ping, auto-reconnect. Requires the SDK registered." />
-            <Button x:Name="DisconnectButton" Content="Disconnect" Width="100" Height="30"
-                    Click="DisconnectButton_Click" IsEnabled="False" Margin="0,0,8,0" />
-            <Button x:Name="BackfillButton" Content="3. Backfill from Device" Width="160" Height="30"
-                    Click="BackfillButton_Click" IsEnabled="False"
-                    ToolTip="Read all transactions stored on the device into the local database (deduped)." />
-            <TextBlock x:Name="LastBackfillText" Text="Last backfill: never" Margin="12,0,0,0"
-                       VerticalAlignment="Center" Foreground="Gray" />
-        </StackPanel>
-
-        <!-- Live feed + log -->
-        <Grid Grid.Row="3">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-
-            <GroupBox Grid.Column="0" Header="Live Punch Feed (last 20)" Margin="0,0,8,0">
-                <ListBox x:Name="FeedList" FontFamily="Consolas" FontSize="12" />
-            </GroupBox>
-
-            <GroupBox Grid.Column="1" Header="Log">
-                <TextBox x:Name="LogBox" IsReadOnly="True" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12"
-                         Background="#FF1E1E1E" Foreground="#FFE0E0E0" />
-            </GroupBox>
+            <!-- Hosted views (Dashboard / Employees / Holidays / Attendance) -->
+            <ContentControl x:Name="PageHost" Visibility="Collapsed" />
         </Grid>
     </Grid>
 </Window>

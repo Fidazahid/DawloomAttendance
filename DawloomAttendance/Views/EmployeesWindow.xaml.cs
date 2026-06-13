@@ -15,7 +15,7 @@ namespace DawloomAttendance.Views
     /// which pulls enrolled K70 users and creates an employee row for each new
     /// enrollment number (so raw punches resolve to people).
     /// </summary>
-    public partial class EmployeesWindow : Window
+    public partial class EmployeesWindow : System.Windows.Controls.UserControl
     {
         private readonly AppDb _db;
         private readonly IZkDevice _device;
@@ -56,7 +56,7 @@ namespace DawloomAttendance.Views
 
         private void ShiftsButton_Click(object sender, RoutedEventArgs e)
         {
-            new ShiftsWindow(_db) { Owner = this }.ShowDialog();
+            new ShiftsWindow(_db) { Owner = Window.GetWindow(this) }.ShowDialog();
             Reload();   // pick up shift edits in the dropdown
         }
 
@@ -71,7 +71,7 @@ namespace DawloomAttendance.Views
                 var users = (await Task.Run(() => _device.ReadAllUsers(_machineNumber))).ToList();
                 if (users.Count == 0)
                 {
-                    MessageBox.Show(this,
+                    MessageBox.Show(Window.GetWindow(this),
                         "No users returned. Make sure the device is connected (green dot on the main window) " +
                         "and the app was built with SDK support.",
                         "Import", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -89,7 +89,7 @@ namespace DawloomAttendance.Views
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Import failed: " + ex.Message, "Import", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(Window.GetWindow(this), "Import failed: " + ex.Message, "Import", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
@@ -103,10 +103,10 @@ namespace DawloomAttendance.Views
                 .Where(x => !string.IsNullOrWhiteSpace(x.EnrollNumber)).ToList();
             if (selected.Count == 0)
             {
-                MessageBox.Show(this, "Select one or more employees (with an Enroll #) first.", "Push", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(Window.GetWindow(this), "Select one or more employees (with an Enroll #) first.", "Push", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            if (MessageBox.Show(this,
+            if (MessageBox.Show(Window.GetWindow(this),
                     $"Create/update {selected.Count} user record(s) on the device?\n" +
                     "(Names/IDs only — fingerprints are enrolled at the device.)",
                     "Push to Device", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
@@ -132,10 +132,10 @@ namespace DawloomAttendance.Views
                 .Where(x => !string.IsNullOrWhiteSpace(x.EnrollNumber)).ToList();
             if (selected.Count == 0)
             {
-                MessageBox.Show(this, "Select one or more employees first.", "Remove", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(Window.GetWindow(this), "Select one or more employees first.", "Remove", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            if (MessageBox.Show(this,
+            if (MessageBox.Show(Window.GetWindow(this),
                     $"PERMANENTLY remove {selected.Count} user(s) AND their fingerprints from the device?\n\n" +
                     "This cannot be undone. (Their employee record in this app is kept.)",
                     "Remove from Device", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
@@ -165,7 +165,7 @@ namespace DawloomAttendance.Views
             var selected = Grid.SelectedItems.Cast<Employee>().ToList();
             if (selected.Count == 0) return;
 
-            if (MessageBox.Show(this, $"Delete {selected.Count} employee(s)?", "Confirm",
+            if (MessageBox.Show(Window.GetWindow(this), $"Delete {selected.Count} employee(s)?", "Confirm",
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
@@ -199,7 +199,7 @@ namespace DawloomAttendance.Views
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Save failed: " + ex.Message +
+                MessageBox.Show(Window.GetWindow(this), "Save failed: " + ex.Message +
                     "\n(Enroll # must be unique.)", "Save", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }

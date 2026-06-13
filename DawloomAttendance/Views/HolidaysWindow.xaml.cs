@@ -10,7 +10,7 @@ using DawloomAttendance.Data.Entities;
 namespace DawloomAttendance.Views
 {
     /// <summary>CRUD for the holiday calendar (used by the Phase 3 calc engine to skip non-working days).</summary>
-    public partial class HolidaysWindow : Window
+    public partial class HolidaysWindow : System.Windows.Controls.UserControl
     {
         private readonly AppDb _db;
         private ObservableCollection<Holiday> _holidays;
@@ -117,11 +117,11 @@ namespace DawloomAttendance.Views
 
                 SaveCurrentScope();
 
-                MessageBox.Show(this, "Holidays saved.", "Save", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(Window.GetWindow(this), "Holidays saved.", "Save", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Save failed: " + ex.Message, "Save", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(Window.GetWindow(this), "Save failed: " + ex.Message, "Save", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }

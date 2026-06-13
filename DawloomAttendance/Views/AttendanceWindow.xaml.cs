@@ -7,7 +7,7 @@ using DawloomAttendance.Services;
 namespace DawloomAttendance.Views
 {
     /// <summary>Shows computed daily attendance for a chosen date (Phase 3 engine over the DB).</summary>
-    public partial class AttendanceWindow : Window
+    public partial class AttendanceWindow : System.Windows.Controls.UserControl
     {
         private readonly AppDb _db;
 
@@ -25,11 +25,11 @@ namespace DawloomAttendance.Views
         {
             if (!(Grid.SelectedItem is AttendanceRow row))
             {
-                MessageBox.Show(this, "Select an employee row first.", "Edit Punches", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(Window.GetWindow(this), "Select an employee row first.", "Edit Punches", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             var date = DatePick.SelectedDate ?? DateTime.Today;
-            var win = new PunchEditWindow(_db, row.Enroll, date, row.Name) { Owner = this };
+            var win = new PunchEditWindow(_db, row.Enroll, date, row.Name) { Owner = Window.GetWindow(this) };
             win.ShowDialog();
             if (win.Changed) Compute();   // reflect edits/deletes
         }
