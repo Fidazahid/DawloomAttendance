@@ -1,12 +1,79 @@
-﻿<Window x:Class="DawloomAttendance.MainWindow"
+<Window x:Class="DawloomAttendance.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:DawloomAttendance"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
-        
+        Title="Dawloom Attendance — Device Connection Test" Height="560" Width="720">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- Connection status -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+            <Ellipse x:Name="StatusDot" Width="16" Height="16" Fill="Gray"
+                     VerticalAlignment="Center" />
+            <TextBlock x:Name="StatusText" Text="Disconnected" Margin="8,0,0,0"
+                       VerticalAlignment="Center" FontSize="16" FontWeight="SemiBold" />
+        </StackPanel>
+
+        <!-- Device target summary + Settings dialog launcher -->
+        <GroupBox Grid.Row="1" Header="ZKTeco K70 Connection" Padding="10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" x:Name="TargetText" VerticalAlignment="Center"
+                           Text="Target: (not configured)" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button x:Name="SyncTimeButton" Content="Sync Time" Width="90" Height="28" Margin="0,0,8,0"
+                            Click="SyncTimeButton_Click" IsEnabled="False"
+                            ToolTip="Set the device clock to this PC's current time." />
+                    <Button x:Name="SettingsButton" Content="Settings…" Width="90" Height="28"
+                            Click="SettingsButton_Click" />
+                </StackPanel>
+            </Grid>
+        </GroupBox>
+
+        <!-- Actions -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,12,0,12">
+            <Button x:Name="ProbeButton" Content="1. TCP Probe" Width="120" Height="30"
+                    Click="ProbeButton_Click" Margin="0,0,8,0"
+                    ToolTip="Check the device answers on IP:port (no SDK required)." />
+            <Button x:Name="ConnectButton" Content="2. Connect (auto-reconnect)" Width="180" Height="30"
+                    Click="ConnectButton_Click" Margin="0,0,8,0"
+                    ToolTip="Start a self-healing connection: connect, keep-alive ping, auto-reconnect. Requires the SDK registered." />
+            <Button x:Name="DisconnectButton" Content="Disconnect" Width="100" Height="30"
+                    Click="DisconnectButton_Click" IsEnabled="False" Margin="0,0,8,0" />
+            <Button x:Name="BackfillButton" Content="3. Backfill from Device" Width="160" Height="30"
+                    Click="BackfillButton_Click" IsEnabled="False"
+                    ToolTip="Read all transactions stored on the device into the local database (deduped)." />
+            <TextBlock x:Name="LastBackfillText" Text="Last backfill: never" Margin="12,0,0,0"
+                       VerticalAlignment="Center" Foreground="Gray" />
+        </StackPanel>
+
+        <!-- Live feed + log -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <GroupBox Grid.Column="0" Header="Live Punch Feed (last 20)" Margin="0,0,8,0">
+                <ListBox x:Name="FeedList" FontFamily="Consolas" FontSize="12" />
+            </GroupBox>
+
+            <GroupBox Grid.Column="1" Header="Log">
+                <TextBox x:Name="LogBox" IsReadOnly="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="12"
+                         Background="#FF1E1E1E" Foreground="#FFE0E0E0" />
+            </GroupBox>
+        </Grid>
     </Grid>
 </Window>

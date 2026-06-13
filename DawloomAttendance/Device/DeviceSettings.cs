@@ -11,6 +11,7 @@ namespace DawloomAttendance.Device
         public int ReconnectIntervalSeconds { get; set; } = 10;
         public int EventMask { get; set; } = 65535;
         public int KeepAliveIntervalSeconds { get; set; } = 30;
+        public bool SyncTimeOnConnect { get; set; } = true;   // keep the K70 clock matched to the PC
 
         public static DeviceSettings Load()
         {
@@ -25,6 +26,7 @@ namespace DawloomAttendance.Device
             if (int.TryParse(app["Device.ReconnectIntervalSeconds"], out var ri)) s.ReconnectIntervalSeconds = ri;
             if (int.TryParse(app["Device.EventMask"], out var em)) s.EventMask = em;
             if (int.TryParse(app["Device.KeepAliveIntervalSeconds"], out var ka)) s.KeepAliveIntervalSeconds = ka;
+            if (bool.TryParse(app["Device.SyncTimeOnConnect"], out var st)) s.SyncTimeOnConnect = st;
 
             return s;
         }
@@ -39,6 +41,7 @@ namespace DawloomAttendance.Device
             Set(cfg, "Device.ReconnectIntervalSeconds", ReconnectIntervalSeconds.ToString());
             Set(cfg, "Device.EventMask", EventMask.ToString());
             Set(cfg, "Device.KeepAliveIntervalSeconds", KeepAliveIntervalSeconds.ToString());
+            Set(cfg, "Device.SyncTimeOnConnect", SyncTimeOnConnect.ToString());
             cfg.Save(ConfigurationSaveMode.Modified);
             ConfigurationManager.RefreshSection("appSettings");
         }

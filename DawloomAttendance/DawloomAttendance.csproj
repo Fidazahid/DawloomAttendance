@@ -15,6 +15,8 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
     <Prefer32Bit>false</Prefer32Bit>
+    <!-- Use modern PackageReference restore (project.assets.json) instead of packages.config. -->
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <PlatformTarget>x86</PlatformTarget>
@@ -35,31 +37,37 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
+  <!-- ZkSdk: opt-in for strongly-typed ZKTeco interop + live event capture.
+       Default false so the project builds on machines without the SDK.
+       After registering the SDK (lib\zkteco\Register.bat as Admin), build with
+       /p:ZkSdk=true  (or set <ZkSdk>true</ZkSdk> here / in your VS build).
+       When true: the COMReference below generates Interop.zkemkeeper.dll and the
+       ZK_TYPED constant compiles the OnAttTransactionEx live-capture code path. -->
+  <PropertyGroup>
+    <ZkSdk Condition=" '$(ZkSdk)' == '' ">false</ZkSdk>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(ZkSdk)' == 'true' ">
+    <DefineConstants>$(DefineConstants);ZK_TYPED</DefineConstants>
+  </PropertyGroup>
+  <!-- Persistence: System.Data.SQLite.Core — the SQLite team's ADO.NET provider,
+       purpose-built for .NET Framework. Chosen over Microsoft.Data.Sqlite because
+       MDS 6.0's BundleInitializer NREs in ApplicationDataHelper on a non-packaged
+       WPF app (it probes for a WinRT ApplicationData folder that doesn't exist).
+       System.Data.SQLite.Core ships SQLite.Interop.dll per-architecture (x86/x64)
+       and its x86 build is loaded by our x86 process. (Serilog file logging is a
+       later step; device events are persisted to the SQLite DeviceLog table.) -->
   <ItemGroup>
-    <Reference Include="Microsoft.Data.Sqlite, Version=6.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
-      <HintPath>..\packages\Microsoft.Data.Sqlite.Core.6.0.0\lib\netstandard2.0\Microsoft.Data.Sqlite.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Serilog, Version=2.12.0.0, Culture=neutral, PublicKeyToken=24c2f752a8e58a10, processorArchitecture=MSIL">
-      <HintPath>..\packages\Serilog.2.12.0\lib\net46\Serilog.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Serilog.Sinks.File, Version=5.0.0.0, Culture=neutral, PublicKeyToken=24c2f752a8e58a10, processorArchitecture=MSIL">
-      <HintPath>..\packages\Serilog.Sinks.File.5.0.0\lib\net45\Serilog.Sinks.File.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="SQLitePCLRaw.batteries_v2, Version=2.0.7.1932, Culture=neutral, PublicKeyToken=8226ea5df37bcae9, processorArchitecture=MSIL">
-      <HintPath>..\packages\SQLitePCLRaw.bundle_e_sqlite3.2.0.7\lib\net461\SQLitePCLRaw.batteries_v2.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="SQLitePCLRaw.core, Version=2.0.7.1932, Culture=neutral, PublicKeyToken=1488e028ca7ab535, processorArchitecture=MSIL">
-      <HintPath>..\packages\SQLitePCLRaw.core.2.0.7\lib\netstandard2.0\SQLitePCLRaw.core.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="SQLitePCLRaw.provider.e_sqlite3, Version=2.0.7.1932, Culture=neutral, PublicKeyToken=8226ea5df37bcae9, processorArchitecture=MSIL">
-      <HintPath>..\packages\SQLitePCLRaw.provider.e_sqlite3.2.0.7\lib\netstandard2.0\SQLitePCLRaw.provider.e_sqlite3.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
+    <!-- Rolling-file logging (second sink alongside the SQLite DeviceLog table). -->
+    <PackageReference Include="Serilog" Version="2.12.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
+    <!-- Reference the native-interop package DIRECTLY so its build targets run and
+         copy SQLite.Interop.dll into bin\...\x86 and \x64. Under PackageReference,
+         a transitive package's copy target does not run, so the native engine would
+         otherwise be missing at runtime. -->
+    <PackageReference Include="Stub.System.Data.SQLite.Core.NetFramework" Version="1.0.119" />
+  </ItemGroup>
+  <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
     <Reference Include="System.Data" />
@@ -76,16 +84,24 @@
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
   </ItemGroup>
-  <ItemGroup>
-    <COMReference Include="zkemkeeper">
-      <Guid>{00853A19-BD51-419B-9269-2DABE57EB61F}</Guid>
-      <VersionMajor>1</VersionMajor>
-      <VersionMinor>0</VersionMinor>
-      <Lcid>0</Lcid>
-      <WrapperTool>tlbimp</WrapperTool>
-      <Isolated>False</Isolated>
+  <!-- Strongly-typed interop, only when ZkSdk=true. We reference a pre-generated
+       Interop.zkemkeeper.dll (produced with tlbimp directly from the DLL file and
+       committed under lib\zkteco) rather than a COMReference. This avoids the build
+       needing the COM TypeLib registered — the team only needs the coclass
+       registered to *run* (regsvr32 of zkemkeeper.dll). When ZkSdk is false,
+       ZkDeviceClient falls back to late binding and live capture is compiled out. -->
+  <ItemGroup Condition=" '$(ZkSdk)' == 'true' ">
+    <Reference Include="Interop.zkemkeeper">
+      <HintPath>lib\zkteco\Interop.zkemkeeper.dll</HintPath>
+      <Private>True</Private>
       <EmbedInteropTypes>False</EmbedInteropTypes>
-    </COMReference>
+    </Reference>
+    <!-- Native SDK DLLs must sit next to the exe at runtime (zkemkeeper loads them).
+         Copy them into the output root (not a lib\zkteco subfolder). -->
+    <None Include="lib\zkteco\*.dll" Exclude="lib\zkteco\Interop.zkemkeeper.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ApplicationDefinition Include="App.xaml">
@@ -112,6 +128,9 @@
       <DependentUpon>Views\SettingsWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <!-- Connection-test step: only the files needed to connect to the device.
+         ZkConnectionMonitor, AppDb, BackfillService, logging, settings UI and
+         the view models are added back as their Phase 1 steps land. -->
     <Compile Include="Device\DeviceSettings.cs" />
     <Compile Include="Device\IZkDevice.cs" />
     <Compile Include="Device\ZkDeviceClient.cs" />
@@ -123,11 +142,8 @@
     <Compile Include="Data\Entities\DeviceLog.cs" />
     <Compile Include="Services\BackfillService.cs" />
     <Compile Include="Services\LoggingSetup.cs" />
-    <Compile Include="Services\SqliteLogSink.cs" />
     <Compile Include="ViewModels\ObservableObject.cs" />
     <Compile Include="ViewModels\RelayCommand.cs" />
-    <Compile Include="ViewModels\MainViewModel.cs" />
-    <Compile Include="ViewModels\SettingsViewModel.cs" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs">
@@ -154,18 +170,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="packages.config" />
     <None Include="lib\zkteco\Register.bat">
       <CopyToOutputDirectory>PreserveNewestIfNewer</CopyToOutputDirectory>
     </None>
     <None Include="lib\zkteco\README.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Import Project="..\packages\SQLitePCLRaw.lib.e_sqlite3.2.0.7\build\net461\SQLitePCLRaw.lib.e_sqlite3.targets" Condition="Exists('..\packages\SQLitePCLRaw.lib.e_sqlite3.2.0.7\build\net461\SQLitePCLRaw.lib.e_sqlite3.targets')" />
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-    <PropertyGroup>
-      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them. For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
-    </PropertyGroup>
-    <Error Condition="!Exists('..\packages\SQLitePCLRaw.lib.e_sqlite3.2.0.7\build\net461\SQLitePCLRaw.lib.e_sqlite3.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\SQLitePCLRaw.lib.e_sqlite3.2.0.7\build\net461\SQLitePCLRaw.lib.e_sqlite3.targets'))" />
-  </Target>
 </Project>
