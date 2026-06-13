@@ -61,6 +61,13 @@ namespace DawloomAttendance
                 _db = AppDb.CreateDefault();
                 Log($"Database ready: {_db.DbPath} ({_db.CountPunches()} punches stored).");
                 PreloadFeed();
+
+                try
+                {
+                    if (Services.BackupService.RunDailyIfNeeded(_db))
+                        Log("Daily backup created: " + Services.BackupService.GetBackupDir(_db));
+                }
+                catch (Exception bex) { Log("[WARN] Daily backup failed: " + bex.Message); }
             }
             catch (Exception ex)
             {
@@ -108,6 +115,12 @@ namespace DawloomAttendance
         {
             if (_db == null) { Log("[FAIL] Database unavailable."); return; }
             ShowPage(new Views.ReportsView(_db));
+        }
+
+        private void NavBackup_Click(object sender, RoutedEventArgs e)
+        {
+            if (_db == null) { Log("[FAIL] Database unavailable."); return; }
+            ShowPage(new Views.BackupView(_db));
         }
 
         private void ShowHome()

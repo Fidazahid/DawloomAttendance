@@ -209,6 +209,24 @@ FROM RawPunch ORDER BY Id DESC LIMIT $limit;";
             return list;
         }
 
+        /// <summary>
+        /// Writes a consistent copy of the database to destPath using SQLite's
+        /// VACUUM INTO (safe even while the app is running; also compacts).
+        /// </summary>
+        public void BackupTo(string destPath)
+        {
+            var dir = Path.GetDirectoryName(destPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            if (File.Exists(destPath)) File.Delete(destPath);   // VACUUM INTO requires the target not to exist
+
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "VACUUM INTO '" + destPath.Replace("'", "''") + "';";
+                cmd.ExecuteNonQuery();
+            }
+        }
+
         public long CountPunches()
         {
             using (var conn = Open())
