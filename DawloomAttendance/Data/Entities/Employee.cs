@@ -19,6 +19,9 @@ namespace DawloomAttendance.Data.Entities
         public string Designation { get; set; }
         public string Contact { get; set; }
 
+        /// <summary>Monthly gross salary, used by the payroll report to compute pay.</summary>
+        public double Salary { get; set; }
+
         /// <summary>Assigned shift (FK to Shift); null until shifts are introduced.</summary>
         public long? ShiftId { get; set; }
 

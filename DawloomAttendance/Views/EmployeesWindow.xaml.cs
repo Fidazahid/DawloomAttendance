@@ -183,8 +183,14 @@ namespace DawloomAttendance.Views
             int inserted = 0, updated = 0;
             try
             {
-                foreach (var emp in _employees)
+                foreach (var emp in _employees.ToList())
                 {
+                    // Ignore a pristine, never-saved blank row (e.g. an accidental "Add").
+                    if (emp.Id == 0 && string.IsNullOrWhiteSpace(emp.EnrollNumber) && string.IsNullOrWhiteSpace(emp.Name))
+                    {
+                        _employees.Remove(emp);
+                        continue;
+                    }
                     if (string.IsNullOrWhiteSpace(emp.EnrollNumber))
                         throw new InvalidOperationException("Every employee needs an Enroll # (the device user ID).");
 

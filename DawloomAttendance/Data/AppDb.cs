@@ -88,7 +88,8 @@ CREATE TABLE IF NOT EXISTS Employee (
     Contact       TEXT,
     ShiftId       INTEGER,
     Active        INTEGER NOT NULL DEFAULT 1,
-    CreatedAt     TEXT NOT NULL
+    CreatedAt     TEXT NOT NULL,
+    Salary        REAL NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS Shift (
@@ -123,6 +124,7 @@ CREATE TABLE IF NOT EXISTS WeeklyOff (
 
                 MigrateWeeklyOff(conn);
                 MigrateHolidayEmployee(conn);
+                MigrateColumn(conn, "Employee", "Salary", "REAL NOT NULL DEFAULT 0");
             }
         }
 
@@ -246,7 +248,7 @@ FROM RawPunch ORDER BY Id DESC LIMIT $limit;";
             using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
-SELECT Id, EnrollNumber, Name, Cnic, Department, Designation, Contact, ShiftId, Active, CreatedAt
+SELECT Id, EnrollNumber, Name, Cnic, Department, Designation, Contact, ShiftId, Active, CreatedAt, Salary
 FROM Employee ORDER BY CAST(EnrollNumber AS INTEGER), EnrollNumber;";
                 using (var r = cmd.ExecuteReader())
                 {
@@ -263,7 +265,8 @@ FROM Employee ORDER BY CAST(EnrollNumber AS INTEGER), EnrollNumber;";
                             Contact = r.IsDBNull(6) ? null : r.GetString(6),
                             ShiftId = r.IsDBNull(7) ? (long?)null : r.GetInt64(7),
                             Active = r.GetInt32(8) != 0,
-                            CreatedAt = ParseTime(r.GetString(9))
+                            CreatedAt = ParseTime(r.GetString(9)),
+                            Salary = r.IsDBNull(10) ? 0 : r.GetDouble(10)
                         });
                     }
                 }
@@ -294,8 +297,8 @@ WHERE NOT EXISTS (SELECT 1 FROM Employee WHERE EnrollNumber = $enroll);";
             using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
-INSERT INTO Employee (EnrollNumber, Name, Cnic, Department, Designation, Contact, ShiftId, Active, CreatedAt)
-VALUES ($enroll, $name, $cnic, $dept, $desig, $contact, $shift, $active, $created);";
+INSERT INTO Employee (EnrollNumber, Name, Cnic, Department, Designation, Contact, ShiftId, Active, CreatedAt, Salary)
+VALUES ($enroll, $name, $cnic, $dept, $desig, $contact, $shift, $active, $created, $salary);";
                 BindEmployee(cmd, e);
                 cmd.Parameters.AddWithValue("$created", (e.CreatedAt == default ? DateTime.Now : e.CreatedAt).ToString(TimeFormat));
                 cmd.ExecuteNonQuery();
@@ -310,7 +313,7 @@ VALUES ($enroll, $name, $cnic, $dept, $desig, $contact, $shift, $active, $create
             {
                 cmd.CommandText = @"
 UPDATE Employee SET EnrollNumber=$enroll, Name=$name, Cnic=$cnic, Department=$dept,
-    Designation=$desig, Contact=$contact, ShiftId=$shift, Active=$active
+    Designation=$desig, Contact=$contact, ShiftId=$shift, Active=$active, Salary=$salary
 WHERE Id=$id;";
                 BindEmployee(cmd, e);
                 cmd.Parameters.AddWithValue("$id", e.Id);
@@ -662,6 +665,25 @@ ON CONFLICT(Key) DO UPDATE SET Value=$v;";
             return monthRule.Count > 0 ? monthRule : GetWeeklyOffDays(0);
         }
 
+        // Adds a column to an existing table if it isn't there yet.
+        private void MigrateColumn(SQLiteConnection conn, string table, string column, string definition)
+        {
+            bool has = false;
+            using (var pragma = conn.CreateCommand())
+            {
+                pragma.CommandText = $"PRAGMA table_info({table});";
+                using (var r = pragma.ExecuteReader())
+                    while (r.Read())
+                        if (string.Equals(r["name"] as string, column, StringComparison.OrdinalIgnoreCase)) has = true;
+            }
+            if (!has)
+                using (var alter = conn.CreateCommand())
+                {
+                    alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {definition};";
+                    alter.ExecuteNonQuery();
+                }
+        }
+
         // Add Holiday.EnrollNumber to pre-existing databases (per-employee leave).
         private void MigrateHolidayEmployee(SQLiteConnection conn)
         {
@@ -763,6 +785,7 @@ WHERE (Recurring = 0 AND Date = $exact) OR (Recurring = 1 AND substr(Date, 6, 5)
             cmd.Parameters.AddWithValue("$contact", (object)e.Contact ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$shift", (object)e.ShiftId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$active", e.Active ? 1 : 0);
+            cmd.Parameters.AddWithValue("$salary", e.Salary);
         }
 
         private SQLiteConnection Open()
