@@ -1,0 +1,42 @@
+<UserControl x:Class="DawloomAttendance.Views.ReportsView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="Period:" VerticalAlignment="Center" Margin="0,0,6,6" />
+            <ComboBox x:Name="PeriodCombo" Width="130" Margin="0,0,12,6" SelectionChanged="PeriodCombo_Changed">
+                <ComboBoxItem Content="This month" IsSelected="True" />
+                <ComboBoxItem Content="Last month" />
+                <ComboBoxItem Content="Custom" />
+            </ComboBox>
+            <TextBlock Text="From:" VerticalAlignment="Center" Margin="0,0,6,6" />
+            <DatePicker x:Name="FromPick" Width="120" Margin="0,0,12,6" IsEnabled="False" />
+            <TextBlock Text="To:" VerticalAlignment="Center" Margin="0,0,6,6" />
+            <DatePicker x:Name="ToPick" Width="120" Margin="0,0,12,6" IsEnabled="False" />
+            <TextBlock Text="Employee:" VerticalAlignment="Center" Margin="0,0,6,6" />
+            <ComboBox x:Name="EmployeeFilter" Width="170" Margin="0,0,12,6"
+                      DisplayMemberPath="Display" SelectedValuePath="Enroll"
+                      ToolTip="All employees, or a specific one." />
+            <TextBlock Text="Report:" VerticalAlignment="Center" Margin="0,0,6,6" />
+            <ComboBox x:Name="TypeCombo" Width="160" Margin="0,0,12,6">
+                <ComboBoxItem Content="Monthly summary" IsSelected="True" />
+                <ComboBoxItem Content="Daily detail" />
+                <ComboBoxItem Content="Late arrivals" />
+                <ComboBoxItem Content="Absentees" />
+            </ComboBox>
+            <Button x:Name="RunButton" Content="Run" Width="80" Height="28" Margin="0,0,8,6" Click="RunButton_Click" />
+            <Button x:Name="ExportButton" Content="Export to Excel" Width="120" Height="28" Margin="0,0,0,6" Click="ExportButton_Click" IsEnabled="False" />
+        </WrapPanel>
+
+        <TextBlock Grid.Row="1" x:Name="Summary" Foreground="Gray" Margin="0,0,0,8" />
+
+        <DataGrid Grid.Row="2" x:Name="Grid" IsReadOnly="True" AutoGenerateColumns="True"
+                  GridLinesVisibility="Horizontal" HeadersVisibility="Column" />
+    </Grid>
+</UserControl>

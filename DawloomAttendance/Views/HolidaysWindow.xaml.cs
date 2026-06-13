@@ -22,7 +22,25 @@ namespace DawloomAttendance.Views
             InitializeComponent();
             _db = db;
             InitScopeCombo();
+            LoadEmployeeChoices();
             Reload();
+        }
+
+        private void LoadEmployeeChoices()
+        {
+            var choices = new List<EmpChoice> { new EmpChoice { Enroll = null, Display = "(All employees)" } };
+            choices.AddRange(_db.GetEmployees().Select(e => new EmpChoice
+            {
+                Enroll = e.EnrollNumber,
+                Display = $"{e.EnrollNumber} - {e.Name}"
+            }));
+            EmployeeColumn.ItemsSource = choices;
+        }
+
+        private class EmpChoice
+        {
+            public string Enroll { get; set; }
+            public string Display { get; set; }
         }
 
         private void InitScopeCombo()

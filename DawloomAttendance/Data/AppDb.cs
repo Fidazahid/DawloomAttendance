@@ -102,10 +102,11 @@ CREATE TABLE IF NOT EXISTS Shift (
 );
 
 CREATE TABLE IF NOT EXISTS Holiday (
-    Id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    Date      TEXT NOT NULL,
-    Label     TEXT,
-    Recurring INTEGER NOT NULL DEFAULT 0
+    Id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    Date         TEXT NOT NULL,
+    Label        TEXT,
+    Recurring    INTEGER NOT NULL DEFAULT 0,
+    EnrollNumber TEXT
 );
 
 CREATE TABLE IF NOT EXISTS Setting (
@@ -121,6 +122,7 @@ CREATE TABLE IF NOT EXISTS WeeklyOff (
                 cmd.ExecuteNonQuery();
 
                 MigrateWeeklyOff(conn);
+                MigrateHolidayEmployee(conn);
             }
         }
 
@@ -389,7 +391,7 @@ UPDATE Shift SET Name=$name, StartTime=$start, EndTime=$end, GraceMinutes=$grace
             using (var conn = Open())
             using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "SELECT Id, Date, Label, Recurring FROM Holiday ORDER BY Date;";
+                cmd.CommandText = "SELECT Id, Date, Label, Recurring, EnrollNumber FROM Holiday ORDER BY Date;";
                 using (var r = cmd.ExecuteReader())
                 {
                     while (r.Read())
@@ -399,7 +401,8 @@ UPDATE Shift SET Name=$name, StartTime=$start, EndTime=$end, GraceMinutes=$grace
                             Id = r.GetInt64(0),
                             Date = ParseTime(r.GetString(1)),
                             Label = r.IsDBNull(2) ? null : r.GetString(2),
-                            Recurring = r.GetInt32(3) != 0
+                            Recurring = r.GetInt32(3) != 0,
+                            EnrollNumber = r.IsDBNull(4) ? null : r.GetString(4)
                         });
                     }
                 }
@@ -412,7 +415,7 @@ UPDATE Shift SET Name=$name, StartTime=$start, EndTime=$end, GraceMinutes=$grace
             using (var conn = Open())
             using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "INSERT INTO Holiday (Date, Label, Recurring) VALUES ($date, $label, $rec);";
+                cmd.CommandText = "INSERT INTO Holiday (Date, Label, Recurring, EnrollNumber) VALUES ($date, $label, $rec, $enroll);";
                 BindHoliday(cmd, h);
                 cmd.ExecuteNonQuery();
                 return conn.LastInsertRowId;
@@ -424,7 +427,7 @@ UPDATE Shift SET Name=$name, StartTime=$start, EndTime=$end, GraceMinutes=$grace
             using (var conn = Open())
             using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "UPDATE Holiday SET Date=$date, Label=$label, Recurring=$rec WHERE Id=$id;";
+                cmd.CommandText = "UPDATE Holiday SET Date=$date, Label=$label, Recurring=$rec, EnrollNumber=$enroll WHERE Id=$id;";
                 BindHoliday(cmd, h);
                 cmd.Parameters.AddWithValue("$id", h.Id);
                 cmd.ExecuteNonQuery();
@@ -458,8 +461,8 @@ UPDATE Shift SET Name=$name, StartTime=$start, EndTime=$end, GraceMinutes=$grace
                 // substr(Date,6,5) extracts "MM-dd" from a "yyyy-MM-dd" value.
                 cmd.CommandText = @"
 SELECT COUNT(*) FROM Holiday
-WHERE (Recurring = 0 AND Date = $exact)
-   OR (Recurring = 1 AND substr(Date, 6, 5) = $md);";
+WHERE (EnrollNumber IS NULL OR EnrollNumber = '')
+  AND ((Recurring = 0 AND Date = $exact) OR (Recurring = 1 AND substr(Date, 6, 5) = $md));";
                 cmd.Parameters.AddWithValue("$exact", date.ToString(DateFormat));
                 cmd.Parameters.AddWithValue("$md", date.ToString("MM-dd"));
                 return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
@@ -641,6 +644,25 @@ ON CONFLICT(Key) DO UPDATE SET Value=$v;";
             return monthRule.Count > 0 ? monthRule : GetWeeklyOffDays(0);
         }
 
+        // Add Holiday.EnrollNumber to pre-existing databases (per-employee leave).
+        private void MigrateHolidayEmployee(SQLiteConnection conn)
+        {
+            bool has = false;
+            using (var pragma = conn.CreateCommand())
+            {
+                pragma.CommandText = "PRAGMA table_info(Holiday);";
+                using (var r = pragma.ExecuteReader())
+                    while (r.Read())
+                        if (string.Equals(r["name"] as string, "EnrollNumber", StringComparison.OrdinalIgnoreCase)) has = true;
+            }
+            if (!has)
+                using (var alter = conn.CreateCommand())
+                {
+                    alter.CommandText = "ALTER TABLE Holiday ADD COLUMN EnrollNumber TEXT;";
+                    alter.ExecuteNonQuery();
+                }
+        }
+
         // One-time migration of the legacy single-CSV setting into the Month=0 scope.
         private void MigrateWeeklyOff(SQLiteConnection conn)
         {
@@ -676,6 +698,31 @@ ON CONFLICT(Key) DO UPDATE SET Value=$v;";
             cmd.Parameters.AddWithValue("$date", h.Date.ToString(DateFormat));
             cmd.Parameters.AddWithValue("$label", (object)h.Label ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$rec", h.Recurring ? 1 : 0);
+            cmd.Parameters.AddWithValue("$enroll", string.IsNullOrEmpty(h.EnrollNumber) ? (object)DBNull.Value : h.EnrollNumber);
+        }
+
+        /// <summary>
+        /// Holidays that fall on the given date — each as (EnrollNumber, Reason).
+        /// EnrollNumber null/empty = company-wide; otherwise it applies to that employee only.
+        /// </summary>
+        public List<KeyValuePair<string, string>> GetHolidaysOn(DateTime date)
+        {
+            var list = new List<KeyValuePair<string, string>>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+SELECT EnrollNumber, Label FROM Holiday
+WHERE (Recurring = 0 AND Date = $exact) OR (Recurring = 1 AND substr(Date, 6, 5) = $md);";
+                cmd.Parameters.AddWithValue("$exact", date.ToString(DateFormat));
+                cmd.Parameters.AddWithValue("$md", date.ToString("MM-dd"));
+                using (var r = cmd.ExecuteReader())
+                    while (r.Read())
+                        list.Add(new KeyValuePair<string, string>(
+                            r.IsDBNull(0) ? null : r.GetString(0),
+                            r.IsDBNull(1) ? null : r.GetString(1)));
+            }
+            return list;
         }
 
         private static void BindShift(SQLiteCommand cmd, Shift s)

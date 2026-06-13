@@ -49,8 +49,11 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellEditingTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="Label" Binding="{Binding Label}" Width="*" />
-                <DataGridCheckBoxColumn Header="Recurring (yearly)" Binding="{Binding Recurring}" Width="120" />
+                <DataGridTextColumn Header="Reason" Binding="{Binding Label}" Width="*" />
+                <DataGridComboBoxColumn Header="Applies to" x:Name="EmployeeColumn" Width="180"
+                                        SelectedValueBinding="{Binding EnrollNumber}"
+                                        SelectedValuePath="Enroll" DisplayMemberPath="Display" />
+                <DataGridCheckBoxColumn Header="Recurring (yearly)" Binding="{Binding Recurring}" Width="110" />
             </DataGrid.Columns>
         </DataGrid>
 

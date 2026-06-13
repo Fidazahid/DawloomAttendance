@@ -25,10 +25,10 @@
                 <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
                 <DataGridTextColumn Header="Check In" Binding="{Binding First}" Width="80" />
                 <DataGridTextColumn Header="Check Out" Binding="{Binding Last}" Width="80" />
-                <DataGridTextColumn Header="Late (min)" Binding="{Binding Late}" Width="80" />
-                <DataGridTextColumn Header="Early (min)" Binding="{Binding Early}" Width="80" />
-                <DataGridTextColumn Header="Worked (h)" Binding="{Binding Worked}" Width="80" />
-                <DataGridTextColumn Header="OT (h)" Binding="{Binding OT}" Width="70" />
+                <DataGridTextColumn Header="Late" Binding="{Binding Late}" Width="80" />
+                <DataGridTextColumn Header="Early" Binding="{Binding Early}" Width="80" />
+                <DataGridTextColumn Header="Worked" Binding="{Binding Worked}" Width="80" />
+                <DataGridTextColumn Header="OT" Binding="{Binding OT}" Width="70" />
                 <DataGridTextColumn Header="Notes" Binding="{Binding Notes}" Width="*" />
             </DataGrid.Columns>
         </DataGrid>

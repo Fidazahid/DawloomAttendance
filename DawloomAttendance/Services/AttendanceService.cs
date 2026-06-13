@@ -21,7 +21,13 @@ namespace DawloomAttendance.Services
             var employees = _db.GetEmployees().Where(e => e.Active).ToList();
             var shifts = _db.GetShifts().ToDictionary(s => s.Id);
             var globalWeekend = _db.ResolveWeeklyOffDays(date);   // month-overrides-year
-            bool datedHoliday = _db.IsDatedHoliday(date);
+
+            // Holidays on this date: company-wide (null enroll) and per-employee.
+            var hols = _db.GetHolidaysOn(date);
+            bool companyHoliday = hols.Any(h => string.IsNullOrEmpty(h.Key));
+            string companyReason = hols.Where(h => string.IsNullOrEmpty(h.Key)).Select(h => h.Value).FirstOrDefault();
+            var employeeHoliday = hols.Where(h => !string.IsNullOrEmpty(h.Key))
+                .GroupBy(h => h.Key).ToDictionary(g => g.Key, g => g.First().Value);
 
             var punchesByEnroll = _db.GetPunchesForDate(date)
                 .GroupBy(p => p.EnrollNumber)
@@ -35,12 +41,29 @@ namespace DawloomAttendance.Services
                 // Weekend precedence: a shift's own weekend days override the global
                 // weekly off-days; with no shift (or no weekend set) fall back to global.
                 var weekend = ParseWeekend(shift?.WeekendDays) ?? globalWeekend;
-                bool isOff = datedHoliday || weekend.Contains((int)date.DayOfWeek);
+                bool isWeekend = weekend.Contains((int)date.DayOfWeek);
+
+                bool empHoliday = employeeHoliday.TryGetValue(e.EnrollNumber, out var empReason);
+                bool isHoliday = companyHoliday || empHoliday;
+                string offReason = isHoliday
+                    ? (companyHoliday ? (companyReason ?? "Holiday") : (empReason ?? "Leave"))
+                    : (isWeekend ? "Weekend" : null);
+
+                bool isOff = isWeekend || isHoliday;
 
                 punchesByEnroll.TryGetValue(e.EnrollNumber, out var punches);
-                results.Add(AttendanceCalculator.Calculate(e.EnrollNumber, date, punches, shift, isOff));
+                results.Add(AttendanceCalculator.Calculate(e.EnrollNumber, date, punches, shift, isOff, offReason));
             }
             return results;
+        }
+
+        /// <summary>Computes attendance for every day in [from, to] (inclusive), all employees.</summary>
+        public List<DailyAttendance> ComputeForRange(DateTime from, DateTime to)
+        {
+            var all = new List<DailyAttendance>();
+            for (var d = from.Date; d <= to.Date; d = d.AddDays(1))
+                all.AddRange(ComputeForDate(d));
+            return all;
         }
 
         private static HashSet<int> ParseWeekend(string csv)

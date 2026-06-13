@@ -37,11 +37,18 @@ namespace DawloomAttendance.Services
         public DayCategory Category { get; set; }
         public string Notes { get; set; }
 
+        /// <summary>Why the day is off (e.g. "Weekend", "Eid", a leave reason).</summary>
+        public string OffReason { get; set; }
+
         public string Status
         {
             get
             {
-                if (Category == DayCategory.Off) return Present ? "Off (worked)" : "Off";
+                if (Category == DayCategory.Off)
+                {
+                    string label = string.IsNullOrEmpty(OffReason) ? "Off" : "Off — " + OffReason;
+                    return Present ? label + " (worked)" : label;
+                }
                 if (Absent) return "Absent";
                 if (Category == DayCategory.HalfDay) return Late ? "Half / Late" : "Half-day";
                 return Late ? "Late" : "Present";

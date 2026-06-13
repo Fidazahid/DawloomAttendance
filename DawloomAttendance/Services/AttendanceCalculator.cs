@@ -20,13 +20,15 @@ namespace DawloomAttendance.Services
     public static class AttendanceCalculator
     {
         public static DailyAttendance Calculate(
-            string enrollNumber, DateTime date, IEnumerable<RawPunch> punches, Shift shift, bool isNonWorkingDay)
+            string enrollNumber, DateTime date, IEnumerable<RawPunch> punches, Shift shift,
+            bool isNonWorkingDay, string offReason = null)
         {
             var da = new DailyAttendance
             {
                 EnrollNumber = enrollNumber,
                 Date = date.Date,
-                IsWorkingDay = !isNonWorkingDay
+                IsWorkingDay = !isNonWorkingDay,
+                OffReason = isNonWorkingDay ? offReason : null
             };
 
             var ordered = (punches ?? Enumerable.Empty<RawPunch>())

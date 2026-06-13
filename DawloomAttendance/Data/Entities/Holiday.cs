@@ -10,7 +10,10 @@ namespace DawloomAttendance.Data.Entities
     {
         public long Id { get; set; }
         public DateTime Date { get; set; } = DateTime.Today;
-        public string Label { get; set; }
+        public string Label { get; set; }   // shown as the reason
         public bool Recurring { get; set; }
+
+        /// <summary>Enroll # this applies to; null/empty = all employees (company-wide).</summary>
+        public string EnrollNumber { get; set; }
     }
 }

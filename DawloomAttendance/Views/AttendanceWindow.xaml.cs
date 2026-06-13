@@ -47,10 +47,10 @@ namespace DawloomAttendance.Views
                 Status = r.Status,
                 First = r.FirstPunch?.ToString("HH:mm:ss") ?? "",
                 Last = r.LastPunch?.ToString("HH:mm:ss") ?? "",
-                Late = r.Late ? r.LateMinutes.ToString() : "",
-                Early = r.EarlyDeparture ? r.EarlyMinutes.ToString() : "",
-                Worked = r.WorkedHours > 0 ? r.WorkedHours.ToString("0.##") : "",
-                OT = r.OvertimeHours > 0 ? r.OvertimeHours.ToString("0.##") : "",
+                Late = r.Late ? DurationFormat.Minutes(r.LateMinutes) : "",
+                Early = r.EarlyDeparture ? DurationFormat.Minutes(r.EarlyMinutes) : "",
+                Worked = DurationFormat.Hours(r.WorkedHours),
+                OT = DurationFormat.Hours(r.OvertimeHours),
                 Notes = r.Notes
             }).ToList();
 

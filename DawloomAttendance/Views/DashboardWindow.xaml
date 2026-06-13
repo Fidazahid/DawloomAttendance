@@ -75,8 +75,8 @@
                 <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" />
                 <DataGridTextColumn Header="Check In" Binding="{Binding In}" Width="90" />
                 <DataGridTextColumn Header="Check Out" Binding="{Binding Out}" Width="90" />
-                <DataGridTextColumn Header="Late (min)" Binding="{Binding Late}" Width="80" />
-                <DataGridTextColumn Header="Worked (h)" Binding="{Binding Worked}" Width="80" />
+                <DataGridTextColumn Header="Late" Binding="{Binding Late}" Width="80" />
+                <DataGridTextColumn Header="Worked" Binding="{Binding Worked}" Width="80" />
             </DataGrid.Columns>
         </DataGrid>
     </Grid>
