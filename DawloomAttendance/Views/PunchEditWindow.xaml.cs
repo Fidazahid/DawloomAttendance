@@ -49,6 +49,42 @@ namespace DawloomAttendance.Views
             Grid.ItemsSource = _punches;
         }
 
+        private void Add_Click(object sender, RoutedEventArgs e)
+        {
+            var text = (NewTimeBox.Text ?? "").Trim();
+            if (!TimeSpan.TryParseExact(text, new[] { @"hh\:mm", @"h\:mm" },
+                    System.Globalization.CultureInfo.InvariantCulture, out var tod))
+            {
+                MessageBox.Show(this, "Enter the time as HH:mm (e.g. 18:00).", "Add punch", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            int attState = int.Parse(((System.Windows.Controls.ComboBoxItem)NewTypeBox.SelectedItem).Tag.ToString());
+            var ts = _date.Date + tod;
+
+            var punch = new RawPunch
+            {
+                EnrollNumber = _enroll,
+                Timestamp = ts,
+                AttState = attState,
+                VerifyMethod = 0,
+                WorkCode = 0,
+                IsValid = true,
+                CapturedAt = DateTime.Now,
+                Source = "manual"
+            };
+
+            if (_db.InsertPunchIfNew(punch))
+            {
+                Changed = true;
+                Reload();
+            }
+            else
+            {
+                MessageBox.Show(this, "A punch already exists at that time.", "Add punch", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
         private void Delete_Click(object sender, RoutedEventArgs e)
         {
             var selected = Grid.SelectedItems.Cast<RawPunch>().ToList();

@@ -38,6 +38,18 @@ namespace DawloomAttendance.Views
 
         private void RefreshButton_Click(object sender, RoutedEventArgs e) => Refresh();
         private void DatePick_Changed(object sender, SelectionChangedEventArgs e) => Refresh();
+
+        private void EditPunchesButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!(Grid.SelectedItem is DashboardRow row))
+            {
+                MessageBox.Show(Window.GetWindow(this), "Select an employee row first.", "Edit Punches", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            var win = new PunchEditWindow(_db, row.Enroll, SelectedDate, row.Name) { Owner = Window.GetWindow(this) };
+            win.ShowDialog();
+            if (win.Changed) Refresh();
+        }
         private void Filter_Changed(object sender, RoutedEventArgs e) => ApplyFilter();
 
         private void Refresh()

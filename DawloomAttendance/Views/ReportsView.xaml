@@ -19,10 +19,31 @@
             <DatePicker x:Name="FromPick" Width="120" Margin="0,0,12,6" IsEnabled="False" />
             <TextBlock Text="To:" VerticalAlignment="Center" Margin="0,0,6,6" />
             <DatePicker x:Name="ToPick" Width="120" Margin="0,0,12,6" IsEnabled="False" />
-            <TextBlock Text="Employee:" VerticalAlignment="Center" Margin="0,0,6,6" />
-            <ComboBox x:Name="EmployeeFilter" Width="170" Margin="0,0,12,6"
-                      DisplayMemberPath="Display" SelectedValuePath="Enroll"
-                      ToolTip="All employees, or a specific one." />
+            <TextBlock Text="Employees:" VerticalAlignment="Center" Margin="0,0,6,6" />
+            <Grid Margin="0,0,12,6" VerticalAlignment="Center">
+                <ToggleButton x:Name="EmpDropdownButton" Width="200" Height="26" HorizontalContentAlignment="Stretch"
+                              Padding="6,0" Unchecked="EmpDropdown_Closed"
+                              ToolTip="Check none = all employees; check some = only those.">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Right" Text="▼" FontSize="9" VerticalAlignment="Center" Margin="4,0,0,0" />
+                        <TextBlock x:Name="EmpSummaryText" Text="All employees" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                </ToggleButton>
+                <Popup IsOpen="{Binding IsChecked, ElementName=EmpDropdownButton, Mode=TwoWay}"
+                       PlacementTarget="{Binding ElementName=EmpDropdownButton}" Placement="Bottom"
+                       StaysOpen="False" AllowsTransparency="True">
+                    <Border Background="White" BorderBrush="#FF999999" BorderThickness="1">
+                        <ListBox x:Name="EmployeeList" Width="200" MaxHeight="240" BorderThickness="0"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox Content="{Binding Display}" IsChecked="{Binding IsChecked, Mode=TwoWay}" Margin="4,2" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                </Popup>
+            </Grid>
             <TextBlock Text="Report:" VerticalAlignment="Center" Margin="0,0,6,6" />
             <ComboBox x:Name="TypeCombo" Width="160" Margin="0,0,12,6">
                 <ComboBoxItem Content="Monthly summary" IsSelected="True" />
@@ -31,7 +52,8 @@
                 <ComboBoxItem Content="Absentees" />
             </ComboBox>
             <Button x:Name="RunButton" Content="Run" Width="80" Height="28" Margin="0,0,8,6" Click="RunButton_Click" />
-            <Button x:Name="ExportButton" Content="Export to Excel" Width="120" Height="28" Margin="0,0,0,6" Click="ExportButton_Click" IsEnabled="False" />
+            <Button x:Name="ExportButton" Content="Export to Excel" Width="120" Height="28" Margin="0,0,8,6" Click="ExportButton_Click" IsEnabled="False" />
+            <Button x:Name="ExportPdfButton" Content="Export to PDF" Width="110" Height="28" Margin="0,0,0,6" Click="ExportPdfButton_Click" IsEnabled="False" />
         </WrapPanel>
 
         <TextBlock Grid.Row="1" x:Name="Summary" Foreground="Gray" Margin="0,0,0,8" />

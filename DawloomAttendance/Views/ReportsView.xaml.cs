@@ -16,6 +16,7 @@ namespace DawloomAttendance.Views
         private readonly AppDb _db;
         private DataTable _current;
         private string _reportName = "Report";
+        private string _periodText = "";
 
         public ReportsView(AppDb db)
         {
@@ -26,19 +27,26 @@ namespace DawloomAttendance.Views
             FromPick.SelectedDate = new DateTime(today.Year, today.Month, 1);
             ToPick.SelectedDate = today;
 
-            var emps = new List<EmpFilter> { new EmpFilter { Enroll = null, Display = "All employees" } };
-            emps.AddRange(_db.GetEmployees().Select(e => new EmpFilter { Enroll = e.EnrollNumber, Display = $"{e.EnrollNumber} - {e.Name}" }));
-            EmployeeFilter.ItemsSource = emps;
-            EmployeeFilter.SelectedIndex = 0;
+            EmployeeList.ItemsSource = _db.GetEmployees()
+                .Select(e => new EmpPick { Enroll = e.EnrollNumber, Display = $"{e.EnrollNumber} - {e.Name}" })
+                .ToList();
         }
 
-        private class EmpFilter
+        private class EmpPick
         {
             public string Enroll { get; set; }
             public string Display { get; set; }
+            public bool IsChecked { get; set; }
         }
 
         private string SelectedType => (TypeCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "Monthly summary";
+
+        // Update the dropdown button text when the employee popup closes.
+        private void EmpDropdown_Closed(object sender, RoutedEventArgs e)
+        {
+            int n = (EmployeeList.ItemsSource as IEnumerable<EmpPick>)?.Count(p => p.IsChecked) ?? 0;
+            EmpSummaryText.Text = n == 0 ? "All employees" : (n == 1 ? "1 selected" : n + " selected");
+        }
 
         private void PeriodCombo_Changed(object sender, SelectionChangedEventArgs e)
         {
@@ -80,10 +88,14 @@ namespace DawloomAttendance.Views
 
             var data = new AttendanceService(_db).ComputeForRange(from, to);
 
-            // Optional single-employee filter.
-            var selEnroll = EmployeeFilter.SelectedValue as string;
-            if (!string.IsNullOrEmpty(selEnroll))
-                data = data.Where(d => d.EnrollNumber == selEnroll).ToList();
+            // Optional multi-employee filter: none checked = all; some checked = only those.
+            var selected = (EmployeeList.ItemsSource as IEnumerable<EmpPick>)
+                .Where(p => p.IsChecked).Select(p => p.Enroll).ToList();
+            if (selected.Count > 0)
+            {
+                var set = new HashSet<string>(selected);
+                data = data.Where(d => set.Contains(d.EnrollNumber)).ToList();
+            }
 
             switch (SelectedType)
             {
@@ -95,7 +107,8 @@ namespace DawloomAttendance.Views
 
             Grid.ItemsSource = _current.DefaultView;
             Summary.Text = $"{_reportName}: {from:yyyy-MM-dd} to {to:yyyy-MM-dd} — {_current.Rows.Count} rows.";
-            ExportButton.IsEnabled = _current.Rows.Count > 0;
+            ExportButton.IsEnabled = ExportPdfButton.IsEnabled = _current.Rows.Count > 0;
+            _periodText = $"{from:yyyy-MM-dd} to {to:yyyy-MM-dd}";
         }
 
         private static string Nm(IDictionary<string, Data.Entities.Employee> names, string enroll)
@@ -106,34 +119,45 @@ namespace DawloomAttendance.Views
         private static DataTable MonthlySummary(List<DailyAttendance> data, IDictionary<string, Data.Entities.Employee> names,
             IDictionary<string, Data.Entities.Shift> shiftByEnroll)
         {
-            var t = new DataTable();
-            t.Columns.Add("Enroll"); t.Columns.Add("Name"); t.Columns.Add("Department"); t.Columns.Add("Shift");
-            t.Columns.Add("Working days"); t.Columns.Add("Present"); t.Columns.Add("Absent");
-            t.Columns.Add("Late days"); t.Columns.Add("Late time"); t.Columns.Add("Worked"); t.Columns.Add("Attendance %");
-
-            foreach (var g in data.GroupBy(d => d.EnrollNumber).OrderBy(g => SortKey(g.Key)))
+            // Build per-employee rows with a numeric % so we can rank them.
+            var summaries = data.GroupBy(d => d.EnrollNumber).Select(g =>
             {
                 shiftByEnroll.TryGetValue(g.Key, out var shift);
                 double shiftHours = ShiftHours(shift);
-
                 int workingDays = g.Count(x => x.IsWorkingDay);
-                double workedTotal = g.Sum(x => x.WorkedHours);                              // all days (incl. any holiday work)
-                double workedOnWorkingDays = g.Where(x => x.IsWorkingDay).Sum(x => x.WorkedHours);
-                int lateMinutes = g.Where(x => x.Late).Sum(x => x.LateMinutes);
-                double expected = workingDays * shiftHours;                                  // per the employee's shift; holidays excluded
-                string pct = shiftHours > 0 && expected > 0
-                    ? (workedOnWorkingDays / expected * 100).ToString("0.#") + "%"
-                    : "—";
+                double workedWorkingDays = g.Where(x => x.IsWorkingDay).Sum(x => x.WorkedHours);
+                double expected = workingDays * shiftHours;
+                return new
+                {
+                    Enroll = g.Key,
+                    Shift = ShiftDisplay(shift),
+                    WorkingDays = workingDays,
+                    Present = g.Count(x => x.Present),
+                    Absent = g.Count(x => x.Absent),
+                    LateDays = g.Count(x => x.Late),
+                    LateMinutes = g.Where(x => x.Late).Sum(x => x.LateMinutes),
+                    Worked = g.Sum(x => x.WorkedHours),
+                    Pct = (shiftHours > 0 && expected > 0) ? (double?)(workedWorkingDays / expected * 100) : null
+                };
+            })
+            .OrderByDescending(x => x.Pct ?? -1)   // highest attendance first; no-shift to the bottom
+            .ThenBy(x => SortKey(x.Enroll))
+            .ToList();
 
+            var t = new DataTable();
+            t.Columns.Add("Rank"); t.Columns.Add("Enroll"); t.Columns.Add("Name"); t.Columns.Add("Department"); t.Columns.Add("Shift");
+            t.Columns.Add("Working days"); t.Columns.Add("Present"); t.Columns.Add("Absent");
+            t.Columns.Add("Late days"); t.Columns.Add("Late time"); t.Columns.Add("Worked"); t.Columns.Add("Attendance %");
+
+            int rank = 1;
+            foreach (var x in summaries)
+            {
                 t.Rows.Add(
-                    g.Key, Nm(names, g.Key), Dept(names, g.Key), ShiftDisplay(shift),
-                    workingDays,
-                    g.Count(x => x.Present),
-                    g.Count(x => x.Absent),
-                    g.Count(x => x.Late),
-                    DurationFormat.Minutes(lateMinutes),
-                    DurationFormat.Hours(workedTotal),
-                    pct);
+                    rank++, x.Enroll, Nm(names, x.Enroll), Dept(names, x.Enroll), x.Shift,
+                    x.WorkingDays, x.Present, x.Absent, x.LateDays,
+                    DurationFormat.Minutes(x.LateMinutes),
+                    DurationFormat.Hours(x.Worked),
+                    x.Pct.HasValue ? x.Pct.Value.ToString("0.#") + "%" : "—");
             }
             return t;
         }
@@ -208,11 +232,36 @@ namespace DawloomAttendance.Views
                 var rows = _current.Rows.Cast<DataRow>()
                     .Select(r => (IList<string>)r.ItemArray.Select(v => v?.ToString() ?? "").ToList());
                 ExcelExport.Write(dlg.FileName, _reportName, headers, rows);
-                MessageBox.Show(Window.GetWindow(this), "Saved: " + dlg.FileName, "Export", MessageBoxButton.OK, MessageBoxImage.Information);
+                System.Diagnostics.Process.Start(dlg.FileName);   // open in the default app
             }
             catch (Exception ex)
             {
                 MessageBox.Show(Window.GetWindow(this), "Export failed: " + ex.Message, "Export", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ExportPdfButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_current == null || _current.Rows.Count == 0) return;
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "PDF (*.pdf)|*.pdf",
+                FileName = $"Dawloom_{_reportName.Replace(' ', '_')}_{DateTime.Now:yyyyMMdd}.pdf"
+            };
+            if (dlg.ShowDialog() != true) return;
+
+            try
+            {
+                var headers = _current.Columns.Cast<DataColumn>().Select(c => c.ColumnName).ToList();
+                var rows = _current.Rows.Cast<DataRow>()
+                    .Select(r => (IList<string>)r.ItemArray.Select(v => v?.ToString() ?? "").ToList())
+                    .ToList();
+                PdfExport.Write(dlg.FileName, "Attendance " + _reportName, _periodText, headers, rows);
+                System.Diagnostics.Process.Start(dlg.FileName);   // open in the default app
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Window.GetWindow(this), "PDF export failed: " + ex.Message, "Export", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }

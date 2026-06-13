@@ -31,7 +31,9 @@
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
             <TextBlock Text="Date:" VerticalAlignment="Center" Margin="0,0,6,0" />
             <DatePicker x:Name="DatePick" Width="130" Margin="0,0,8,0" SelectedDateChanged="DatePick_Changed" />
-            <Button x:Name="RefreshButton" Content="Refresh" Width="90" Height="28" Click="RefreshButton_Click" />
+            <Button x:Name="RefreshButton" Content="Refresh" Width="90" Height="28" Click="RefreshButton_Click" Margin="0,0,8,0" />
+            <Button x:Name="EditPunchesButton" Content="Edit Punches…" Width="120" Height="28" Click="EditPunchesButton_Click"
+                    ToolTip="Add a missed punch / fix punches for the selected employee on this date." />
         </StackPanel>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
