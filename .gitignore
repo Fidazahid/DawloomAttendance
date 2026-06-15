@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Release packaging (contains real SMTP credentials / build output)
+dist/
+installer/DawloomAttendance.exe.config

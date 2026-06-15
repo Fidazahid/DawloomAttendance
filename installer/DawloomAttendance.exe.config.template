@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--
+  TEMPLATE for the settings shipped with a client release.
+  Copy this to "DawloomAttendance.exe.config" (same folder), fill in the real
+  device + email values, then run package-release.ps1. The real file is git-ignored
+  because Email.Password is stored in plain text — never commit real credentials.
+-->
+<configuration>
+    <startup>
+        <supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.7.2" />
+    </startup>
+    <appSettings>
+        <add key="Device.Ip" value="192.168.1.201" />
+        <add key="Device.Port" value="4370" />
+        <add key="Device.CommKey" value="0" />
+        <add key="Device.MachineNumber" value="1" />
+        <add key="Device.ReconnectIntervalSeconds" value="10" />
+        <add key="Device.EventMask" value="65535" />
+        <add key="Device.KeepAliveIntervalSeconds" value="30" />
+        <add key="Device.SyncTimeOnConnect" value="True" />
+        <add key="Email.Host" value="smtp.gmail.com" />
+        <add key="Email.Port" value="587" />
+        <add key="Email.UseSsl" value="True" />
+        <add key="Email.FromAddress" value="you@example.com" />
+        <add key="Email.Username" value="you@example.com" />
+        <add key="Email.Password" value="YOUR_APP_PASSWORD" />
+        <add key="Email.EnableAutoSend" value="False" />
+    </appSettings>
+</configuration>
