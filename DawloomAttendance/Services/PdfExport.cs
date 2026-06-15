@@ -143,6 +143,80 @@ namespace DawloomAttendance.Services
             renderer.PdfDocument.Save(path);
         }
 
+        /// <summary>
+        /// One employee's attendance report: a header (name/enroll/period), a summary
+        /// key/value block, then a daily-detail table. Used for emailed weekly/monthly reports.
+        /// </summary>
+        public static void WriteEmployeeReport(string path, string name, string enroll, string period,
+            IList<KeyValuePair<string, string>> summary, IList<string> dailyHeaders, IList<IList<string>> dailyRows)
+        {
+            var doc = new Document();
+            doc.DefaultPageSetup.PageFormat = PageFormat.A4;   // portrait
+            doc.DefaultPageSetup.TopMargin = Unit.FromCentimeter(1.6);
+            doc.DefaultPageSetup.LeftMargin = Unit.FromCentimeter(1.8);
+            doc.DefaultPageSetup.RightMargin = Unit.FromCentimeter(1.8);
+
+            var headerColor = new Color(45, 62, 80);
+            var section = doc.AddSection();
+
+            var title = section.AddParagraph("ATTENDANCE REPORT");
+            title.Format.Font.Size = 16; title.Format.Font.Bold = true; title.Format.Font.Color = headerColor;
+            var sub = section.AddParagraph($"{name}    •    Enroll #{enroll}    •    {period}");
+            sub.Format.Font.Size = 9.5; sub.Format.Font.Color = Colors.Gray;
+            sub.Format.SpaceAfter = Unit.FromCentimeter(0.4);
+
+            var footer = section.Footers.Primary.AddParagraph();
+            footer.AddText("Dawloom Attendance — generated " + DateTime.Now.ToString("yyyy-MM-dd HH:mm") + "      Page ");
+            footer.AddPageField();
+            footer.Format.Font.Size = 8; footer.Format.Font.Color = Colors.Gray;
+
+            AddGroup(section, headerColor, "Summary", summary);
+
+            var dh = section.AddParagraph("Daily detail");
+            dh.Format.Font.Bold = true; dh.Format.Font.Size = 11; dh.Format.Font.Color = headerColor;
+            dh.Format.SpaceBefore = Unit.FromCentimeter(0.35); dh.Format.SpaceAfter = Unit.FromCentimeter(0.1);
+
+            RenderTable(section, dailyHeaders, dailyRows, headerColor, new Color(240, 244, 248));
+
+            var renderer = new PdfDocumentRenderer(true) { Document = doc };
+            renderer.RenderDocument();
+            renderer.PdfDocument.Save(path);
+        }
+
+        /// <summary>Renders a styled header + striped rows table into an existing section.</summary>
+        private static void RenderTable(Section section, IList<string> headers, IList<IList<string>> rows,
+            Color headerColor, Color altRow)
+        {
+            var table = section.AddTable();
+            table.Borders.Width = 0.25;
+            table.Borders.Color = new Color(210, 210, 210);
+
+            for (int c = 0; c < headers.Count; c++)
+            {
+                int maxLen = headers[c]?.Length ?? 0;
+                foreach (var row in rows)
+                    if (c < row.Count) maxLen = Math.Max(maxLen, (row[c] ?? "").Length);
+                double cm = Math.Min(7.0, Math.Max(1.6, maxLen * 0.22));
+                table.AddColumn(Unit.FromCentimeter(cm));
+            }
+
+            var head = table.AddRow();
+            head.Shading.Color = headerColor;
+            head.Format.Font.Bold = true; head.Format.Font.Color = Colors.White;
+            head.VerticalAlignment = VerticalAlignment.Center;
+            for (int c = 0; c < headers.Count; c++)
+                head.Cells[c].AddParagraph(headers[c] ?? "");
+
+            int i = 0;
+            foreach (var row in rows)
+            {
+                var r = table.AddRow();
+                if (i++ % 2 == 1) r.Shading.Color = altRow;
+                for (int c = 0; c < headers.Count; c++)
+                    r.Cells[c].AddParagraph(c < row.Count ? (row[c] ?? "") : "");
+            }
+        }
+
         private static KeyValuePair<string, string> Pair(string k, string v)
             => new KeyValuePair<string, string>(k, v ?? "");
 
