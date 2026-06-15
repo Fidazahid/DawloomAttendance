@@ -314,7 +314,7 @@ namespace DawloomAttendance.Views
             }
         }
 
-        private void SalarySlipButton_Click(object sender, RoutedEventArgs e)
+        private async void SalarySlipButton_Click(object sender, RoutedEventArgs e)
         {
             if (!GatherData(out var from, out var to, out var names, out var shiftByEnroll, out var data)) return;
             var slips = PayrollCalculator.Compute(data, names, shiftByEnroll, LatesPerDeduction(), IncludeOtBox.IsChecked == true);
@@ -337,7 +337,122 @@ namespace DawloomAttendance.Views
             catch (Exception ex)
             {
                 MessageBox.Show(Window.GetWindow(this), "Slip export failed: " + ex.Message, "Salary Slips", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
             }
+
+            // Offer to email each employee their own slip (only meaningful once SMTP is set).
+            var email = EmailSettings.Load();
+            if (email.IsConfigured &&
+                MessageBox.Show(Window.GetWindow(this),
+                    "Also email each employee their individual salary slip?",
+                    "Email Slips", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            {
+                await EmailSlips(slips, names, from, to, email);
+            }
+        }
+
+        // ---- Email sending -----------------------------------------------------------
+
+        private List<Data.Entities.Employee> SelectedEmployees()
+        {
+            var all = _db.GetEmployees().ToList();
+            var picked = new HashSet<string>((EmployeeList.ItemsSource as IEnumerable<EmpPick>)
+                .Where(p => p.IsChecked).Select(p => p.Enroll));
+            return picked.Count == 0 ? all : all.Where(e => picked.Contains(e.EnrollNumber)).ToList();
+        }
+
+        private async void EmailReportsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var from = FromPick.SelectedDate ?? DateTime.Today;
+            var to = ToPick.SelectedDate ?? DateTime.Today;
+            if (to < from) { MessageBox.Show(Window.GetWindow(this), "‘To’ must be on or after ‘From’.", "Email", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+
+            var email = EmailSettings.Load();
+            if (!email.IsConfigured)
+            {
+                MessageBox.Show(Window.GetWindow(this), "Email isn’t configured yet. Open Settings and fill in the SMTP server + From address.",
+                    "Email", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var recipients = SelectedEmployees();
+            if (recipients.Count == 0) { MessageBox.Show(Window.GetWindow(this), "No employees to send to.", "Email", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+
+            if (MessageBox.Show(Window.GetWindow(this),
+                    $"Email the attendance report ({from:yyyy-MM-dd} to {to:yyyy-MM-dd}) to {recipients.Count} employee(s)?",
+                    "Send via Email", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+
+            EmailReportsButton.IsEnabled = false;
+            Summary.Text = "Sending emails …";
+            try
+            {
+                var outcomes = await System.Threading.Tasks.Task.Run(() =>
+                    ReportMailer.Send(_db, email, recipients, from, to, email.SubjectManual, "manual", periodKey: null, skipAlreadySent: false));
+                ShowOutcomeSummary("Send via Email", outcomes);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Window.GetWindow(this), "Email failed: " + ex.Message, "Email", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                EmailReportsButton.IsEnabled = true;
+            }
+        }
+
+        private async System.Threading.Tasks.Task EmailSlips(List<SalarySlip> slips,
+            IDictionary<string, Data.Entities.Employee> names, DateTime from, DateTime to, EmailSettings email)
+        {
+            string period = $"{from:yyyy-MM-dd} to {to:yyyy-MM-dd}";
+            try
+            {
+                var outcomes = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    var list = new List<EmailSendOutcome>();
+                    foreach (var slip in slips)
+                    {
+                        names.TryGetValue(slip.Enroll, out var emp);
+                        string addr = emp?.Email;
+                        if (!EmailService.LooksLikeEmail(addr)) { list.Add(EmailSendOutcome.Fail(slip.Enroll, slip.Name, addr, "no email address")); continue; }
+
+                        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"slip_{slip.Enroll}_{Guid.NewGuid():N}.pdf");
+                        try
+                        {
+                            PdfExport.WriteSalarySlips(path, period, new[] { slip });
+                            var subject = EmailService.FormatSubject(email.SubjectSlip, slip.Name ?? slip.Enroll, period);
+                            EmailService.Send(email, addr, subject, $"Dear {slip.Name},\r\n\r\nPlease find attached your salary slip for {period}.\r\n\r\nRegards,\r\n{email.FromName}", path);
+                            list.Add(EmailSendOutcome.Ok(slip.Enroll, slip.Name, addr));
+                        }
+                        catch (Exception ex) { list.Add(EmailSendOutcome.Fail(slip.Enroll, slip.Name, addr, ex.Message)); }
+                        finally { try { System.IO.File.Delete(path); } catch { } }
+                    }
+                    return list;
+                });
+                ShowOutcomeSummary("Email Slips", outcomes);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Window.GetWindow(this), "Email failed: " + ex.Message, "Email Slips", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ShowOutcomeSummary(string title, List<EmailSendOutcome> outcomes)
+        {
+            int sent = outcomes.Count(o => o.Sent);
+            var missing = outcomes.Where(o => !o.Sent && o.Error == "no email address").ToList();
+            var errors = outcomes.Where(o => !o.Sent && o.Error != "no email address").ToList();
+
+            var msg = $"Sent {sent} of {outcomes.Count}.";
+            if (missing.Count > 0)
+                msg += "\n\nMissing email (not sent):\n" + string.Join("\n", missing.Select(m => $"  {m.Enroll} - {m.Name}"));
+            if (errors.Count > 0)
+                msg += "\n\nFailed:\n" + string.Join("\n", errors.Take(10).Select(m => $"  {m.Enroll} - {m.Name}: {m.Error}")) +
+                       (errors.Count > 10 ? $"\n  … and {errors.Count - 10} more." : "");
+
+            Summary.Text = $"Email: sent {sent}, {missing.Count} missing email, {errors.Count} failed.";
+            MessageBox.Show(Window.GetWindow(this), msg, title, MessageBoxButton.OK,
+                (missing.Count > 0 || errors.Count > 0) ? MessageBoxImage.Warning : MessageBoxImage.Information);
         }
     }
 }

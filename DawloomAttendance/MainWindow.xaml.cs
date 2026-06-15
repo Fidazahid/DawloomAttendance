@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -53,7 +54,38 @@ namespace DawloomAttendance
             Closed += (_, __) => { _monitor.Dispose(); _device.Dispose(); };   // stop loop, disconnect, end COM thread
 
             // Auto-connect once the window is shown (so the error dialog has an owner).
-            Loaded += (_, __) => StartConnection();
+            Loaded += (_, __) => { StartConnection(); RunAutoEmailIfDue(); };
+        }
+
+        /// <summary>
+        /// On launch, if auto-email is enabled, send any not-yet-sent previous-week (Sat–Fri)
+        /// and previous-month reports. The sent-log makes this idempotent and self-catching:
+        /// a missed Monday is sent on the next launch that week; nothing is sent twice.
+        /// </summary>
+        private void RunAutoEmailIfDue()
+        {
+            if (_db == null || _email == null || !_email.EnableAutoSend || !_email.IsConfigured) return;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    var today = DateTime.Today;
+                    var recipients = _db.GetEmployees().Where(x => x.Active).ToList();
+
+                    var (wf, wt) = ReportPeriods.PreviousWeek(today);
+                    var weekly = ReportMailer.Send(_db, _email, recipients, wf, wt,
+                        _email.SubjectWeekly, "weekly", ReportPeriods.WeekKey(wf), skipAlreadySent: true);
+
+                    var (mf, mt) = ReportPeriods.PreviousMonth(today);
+                    var monthly = ReportMailer.Send(_db, _email, recipients, mf, mt,
+                        _email.SubjectMonthly, "monthly", ReportPeriods.MonthKey(mf), skipAlreadySent: true);
+
+                    int w = weekly.Count(o => o.Sent), m = monthly.Count(o => o.Sent);
+                    if (w + m > 0) Log($"Auto-email: sent {w} weekly + {m} monthly report(s).");
+                }
+                catch (Exception ex) { Log("[WARN] Auto-email failed: " + ex.Message); }
+            });
         }
 
         private void InitDatabase()
