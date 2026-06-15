@@ -173,7 +173,20 @@ CREATE TABLE IF NOT EXISTS AuditLog (
     EntityId  TEXT,
     Detail    TEXT
 );
-CREATE INDEX IF NOT EXISTS IX_AuditLog_Timestamp ON AuditLog(Timestamp);";
+CREATE INDEX IF NOT EXISTS IX_AuditLog_Timestamp ON AuditLog(Timestamp);
+
+-- Tracks which report emails were sent, so weekly/monthly auto-send never double-sends
+-- and can tell on launch whether the previous period already went out.
+CREATE TABLE IF NOT EXISTS EmailLog (
+    Id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    EnrollNumber TEXT NOT NULL,
+    Kind         TEXT NOT NULL,   -- 'weekly' / 'monthly' / 'manual'
+    PeriodKey    TEXT NOT NULL,   -- e.g. 'W2026-06-06' (Sat-start week) or 'M2026-06'
+    SentAt       TEXT NOT NULL,
+    Status       TEXT NOT NULL,   -- 'sent' / 'failed'
+    Detail       TEXT
+);
+CREATE INDEX IF NOT EXISTS IX_EmailLog_Lookup ON EmailLog(EnrollNumber, Kind, PeriodKey);";
                 cmd.ExecuteNonQuery();
 
                 MigrateWeeklyOff(conn);
@@ -908,6 +921,43 @@ ORDER BY Timestamp DESC, Id DESC;";
                         if (!r.IsDBNull(0)) list.Add(r.GetString(0));
             }
             return list;
+        }
+
+        // ---- Sent-email log ----------------------------------------------------------
+
+        /// <summary>True if a report of this kind for this period was already sent to the employee.</summary>
+        public bool WasEmailSent(string enrollNumber, string kind, string periodKey)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+SELECT 1 FROM EmailLog
+WHERE EnrollNumber=$e AND Kind=$k AND PeriodKey=$p AND Status='sent' LIMIT 1;";
+                cmd.Parameters.AddWithValue("$e", enrollNumber ?? string.Empty);
+                cmd.Parameters.AddWithValue("$k", kind ?? string.Empty);
+                cmd.Parameters.AddWithValue("$p", periodKey ?? string.Empty);
+                return cmd.ExecuteScalar() != null;
+            }
+        }
+
+        /// <summary>Logs the outcome of a report-email attempt (sent or failed).</summary>
+        public void RecordEmailSent(string enrollNumber, string kind, string periodKey, bool ok, string detail)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+INSERT INTO EmailLog (EnrollNumber, Kind, PeriodKey, SentAt, Status, Detail)
+VALUES ($e, $k, $p, $at, $status, $detail);";
+                cmd.Parameters.AddWithValue("$e", enrollNumber ?? string.Empty);
+                cmd.Parameters.AddWithValue("$k", kind ?? string.Empty);
+                cmd.Parameters.AddWithValue("$p", periodKey ?? string.Empty);
+                cmd.Parameters.AddWithValue("$at", DateTime.Now.ToString(TimeFormat));
+                cmd.Parameters.AddWithValue("$status", ok ? "sent" : "failed");
+                cmd.Parameters.AddWithValue("$detail", (object)detail ?? DBNull.Value);
+                cmd.ExecuteNonQuery();
+            }
         }
 
         public void DeletePunch(long id)

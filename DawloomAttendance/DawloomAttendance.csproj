@@ -242,6 +242,8 @@
     <Compile Include="Services\EmailSettings.cs" />
     <Compile Include="Services\EmailService.cs" />
     <Compile Include="Services\EmployeeReport.cs" />
+    <Compile Include="Services\ReportPeriods.cs" />
+    <Compile Include="Services\ReportMailer.cs" />
     <Compile Include="Services\PdfExport.cs" />
     <Compile Include="Services\BackupService.cs" />
     <Compile Include="Services\SalarySlip.cs" />
