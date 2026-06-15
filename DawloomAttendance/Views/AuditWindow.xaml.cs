@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -11,6 +12,7 @@ namespace DawloomAttendance.Views
     {
         private readonly AppDb _db;
         private bool _loading;
+        private bool _initialized;
 
         private const string AllUsers = "(All users)";
 
@@ -18,38 +20,46 @@ namespace DawloomAttendance.Views
         {
             InitializeComponent();
             _db = db;
-            Loaded += (_, __) => InitOnce();
+            Loaded += OnLoaded;
+            // Auto-refresh whenever the tab is shown again, so new changes appear without
+            // anyone clicking Refresh (the manual button stays as a force-refresh).
+            IsVisibleChanged += OnVisibleChanged;
         }
 
-        private void InitOnce()
+        private void OnLoaded(object sender, RoutedEventArgs e)
         {
+            if (_initialized) return;
             _loading = true;
             ToDate.SelectedDate = DateTime.Today;
             FromDate.SelectedDate = DateTime.Today.AddDays(-30);
-
-            var actors = new[] { AllUsers }.Concat(_db.GetAuditActors()).ToList();
-            ActorBox.ItemsSource = actors;
-            ActorBox.SelectedIndex = 0;
             _loading = false;
-
-            Reload();
+            _initialized = true;
+            RefreshActorsAndReload();
         }
 
-        private void RefreshButton_Click(object sender, RoutedEventArgs e)
+        private void OnVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
         {
-            // Re-read the actor list too — new users may have acted since the view opened.
-            var selected = ActorBox.SelectedItem as string;
-            _loading = true;
-            ActorBox.ItemsSource = new[] { AllUsers }.Concat(_db.GetAuditActors()).ToList();
-            ActorBox.SelectedItem = ((System.Collections.Generic.IEnumerable<string>)ActorBox.ItemsSource)
-                .Contains(selected) ? selected : AllUsers;
-            _loading = false;
-            Reload();
+            if (_initialized && IsVisible) RefreshActorsAndReload();
         }
+
+        private void RefreshButton_Click(object sender, RoutedEventArgs e) => RefreshActorsAndReload();
 
         private void Filter_Changed(object sender, SelectionChangedEventArgs e)
         {
             if (!_loading) Reload();
+        }
+
+        /// <summary>Repopulates the user filter (new actors may have appeared) and reloads the grid.</summary>
+        private void RefreshActorsAndReload()
+        {
+            var selected = ActorBox.SelectedItem as string;
+            _loading = true;
+            var actors = new List<string> { AllUsers };
+            actors.AddRange(_db.GetAuditActors());
+            ActorBox.ItemsSource = actors;
+            ActorBox.SelectedItem = actors.Contains(selected) ? selected : AllUsers;
+            _loading = false;
+            Reload();
         }
 
         private void Reload()
