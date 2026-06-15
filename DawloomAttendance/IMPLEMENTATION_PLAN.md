@@ -38,8 +38,12 @@ real connect, live punch capture, backfill of 1004+ records, attendance calc, re
   is deferred until later (see Open Decision); SDK rules are runtime-agnostic.
 
 ### ⬜ Pending
-- **Phase 5:** email notifications (late alerts, end-of-day summary, SMTP); WhatsApp add-on; leave
-  balances/types (annual/sick/casual/unpaid) — only per-day leave entries exist so far.
+- **Phase 5:** email notifications (late alerts, end-of-day summary, SMTP); WhatsApp add-on.
+  - ✅ **Leave balances/types** (annual/sick/casual/unpaid): typed leave with per-employee yearly
+    entitlements + balances (entitled/taken/remaining), a **Leaves** sidebar view, and integration
+    with the calc engine (typed off-reason) + payroll (paid leave is payable, unpaid is deducted).
+    Covered by `DawloomAttendance.Tests` (MSTest, x86) — 12 tests across payroll math, the leave
+    data layer, and the attendance service. Run via `run-tests.ps1`.
 - **Phase 6:** role-based access (Admin/HR/Manager); audit log of changes.
 - **Phase 7:** single-file installer (Inno Setup/Velopack); User Manual + Admin Guide PDFs; training; handover.
 - **Optional:** Excel bulk employee import; .NET 8 + MVVM migration.

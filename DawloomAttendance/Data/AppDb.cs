@@ -119,12 +119,54 @@ CREATE TABLE IF NOT EXISTS WeeklyOff (
     Month     INTEGER NOT NULL,   -- 0 = whole year, 1-12 = specific month
     DayOfWeek INTEGER NOT NULL,   -- 0=Sun … 6=Sat
     PRIMARY KEY (Month, DayOfWeek)
-);";
+);
+
+-- Device-original punches the user deleted or edited, so on-connect backfill must
+-- NOT re-import them from the device (which still holds the original record).
+CREATE TABLE IF NOT EXISTS SuppressedPunch (
+    EnrollNumber  TEXT NOT NULL,
+    Timestamp     TEXT NOT NULL,
+    Reason        TEXT,
+    SuppressedAt  TEXT NOT NULL,
+    PRIMARY KEY (EnrollNumber, Timestamp)
+);
+
+-- Leave categories (Annual/Sick/Casual/Unpaid). Paid decides whether a day on
+-- this leave still counts toward pay; DefaultDays is the yearly entitlement.
+CREATE TABLE IF NOT EXISTS LeaveType (
+    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    Code        TEXT NOT NULL UNIQUE,
+    Name        TEXT NOT NULL,
+    Paid        INTEGER NOT NULL DEFAULT 1,
+    DefaultDays REAL NOT NULL DEFAULT 0,
+    Active      INTEGER NOT NULL DEFAULT 1
+);
+
+-- Per-employee yearly entitlement override; absent rows fall back to LeaveType.DefaultDays.
+CREATE TABLE IF NOT EXISTS LeaveEntitlement (
+    EnrollNumber TEXT NOT NULL,
+    LeaveTypeId  INTEGER NOT NULL,
+    Year         INTEGER NOT NULL,
+    Days         REAL NOT NULL DEFAULT 0,
+    PRIMARY KEY (EnrollNumber, LeaveTypeId, Year)
+);
+
+-- One row per leave day taken (a multi-day request expands to one row per day).
+CREATE TABLE IF NOT EXISTS LeaveEntry (
+    Id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    EnrollNumber TEXT NOT NULL,
+    LeaveTypeId  INTEGER NOT NULL,
+    Date         TEXT NOT NULL,
+    Reason       TEXT,
+    CreatedAt    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS IX_LeaveEntry_EnrollDate ON LeaveEntry(EnrollNumber, Date);";
                 cmd.ExecuteNonQuery();
 
                 MigrateWeeklyOff(conn);
                 MigrateHolidayEmployee(conn);
                 MigrateColumn(conn, "Employee", "Salary", "REAL NOT NULL DEFAULT 0");
+                SeedLeaveTypes(conn);
             }
         }
 
@@ -466,6 +508,225 @@ UPDATE Shift SET Name=$name, StartTime=$start, EndTime=$end, GraceMinutes=$grace
             }
         }
 
+        // ---- Leave types / entitlements / entries ------------------------------------
+
+        /// <summary>Inserts the four standard leave types once; existing rows are left untouched.</summary>
+        private void SeedLeaveTypes(SQLiteConnection conn)
+        {
+            // (Code, Name, Paid, DefaultDays) — sensible Pakistan-labour defaults; all editable later.
+            var defaults = new[]
+            {
+                ("annual", "Annual",  1, 14.0),
+                ("sick",   "Sick",    1,  8.0),
+                ("casual", "Casual",  1, 10.0),
+                ("unpaid", "Unpaid",  0,  0.0),
+            };
+            foreach (var (code, name, paid, days) in defaults)
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = @"
+INSERT OR IGNORE INTO LeaveType (Code, Name, Paid, DefaultDays, Active)
+VALUES ($code, $name, $paid, $days, 1);";
+                    cmd.Parameters.AddWithValue("$code", code);
+                    cmd.Parameters.AddWithValue("$name", name);
+                    cmd.Parameters.AddWithValue("$paid", paid);
+                    cmd.Parameters.AddWithValue("$days", days);
+                    cmd.ExecuteNonQuery();
+                }
+        }
+
+        public IReadOnlyList<LeaveType> GetLeaveTypes(bool activeOnly = false)
+        {
+            var list = new List<LeaveType>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT Id, Code, Name, Paid, DefaultDays, Active FROM LeaveType"
+                    + (activeOnly ? " WHERE Active = 1" : "") + " ORDER BY Id;";
+                using (var r = cmd.ExecuteReader())
+                    while (r.Read())
+                        list.Add(new LeaveType
+                        {
+                            Id = r.GetInt64(0),
+                            Code = r.GetString(1),
+                            Name = r.GetString(2),
+                            Paid = r.GetInt32(3) != 0,
+                            DefaultDays = r.GetDouble(4),
+                            Active = r.GetInt32(5) != 0
+                        });
+            }
+            return list;
+        }
+
+        public long InsertLeaveType(LeaveType t)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+INSERT INTO LeaveType (Code, Name, Paid, DefaultDays, Active)
+VALUES ($code, $name, $paid, $days, $active);";
+                BindLeaveType(cmd, t);
+                cmd.ExecuteNonQuery();
+                return conn.LastInsertRowId;
+            }
+        }
+
+        public void UpdateLeaveType(LeaveType t)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+UPDATE LeaveType SET Code=$code, Name=$name, Paid=$paid, DefaultDays=$days, Active=$active WHERE Id=$id;";
+                BindLeaveType(cmd, t);
+                cmd.Parameters.AddWithValue("$id", t.Id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        private static void BindLeaveType(SQLiteCommand cmd, LeaveType t)
+        {
+            cmd.Parameters.AddWithValue("$code", (t.Code ?? string.Empty).Trim().ToLowerInvariant());
+            cmd.Parameters.AddWithValue("$name", (object)t.Name ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$paid", t.Paid ? 1 : 0);
+            cmd.Parameters.AddWithValue("$days", t.DefaultDays);
+            cmd.Parameters.AddWithValue("$active", t.Active ? 1 : 0);
+        }
+
+        /// <summary>Sets (or clears) an employee's yearly entitlement override for a leave type.</summary>
+        public void SetEntitlement(string enrollNumber, long leaveTypeId, int year, double days)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+INSERT INTO LeaveEntitlement (EnrollNumber, LeaveTypeId, Year, Days)
+VALUES ($e, $t, $y, $d)
+ON CONFLICT(EnrollNumber, LeaveTypeId, Year) DO UPDATE SET Days = $d;";
+                cmd.Parameters.AddWithValue("$e", enrollNumber ?? string.Empty);
+                cmd.Parameters.AddWithValue("$t", leaveTypeId);
+                cmd.Parameters.AddWithValue("$y", year);
+                cmd.Parameters.AddWithValue("$d", days);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>
+        /// Computed leave balances for one employee in a year: entitlement (per-employee
+        /// override or the type default) minus days actually taken, per active leave type.
+        /// </summary>
+        public IReadOnlyList<LeaveBalance> GetLeaveBalances(string enrollNumber, int year)
+        {
+            var list = new List<LeaveBalance>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+SELECT t.Id, t.Code, t.Name, t.Paid,
+       COALESCE(en.Days, t.DefaultDays) AS Entitled,
+       (SELECT COUNT(*) FROM LeaveEntry le
+          WHERE le.EnrollNumber = $e AND le.LeaveTypeId = t.Id AND substr(le.Date, 1, 4) = $yr) AS Taken
+FROM LeaveType t
+LEFT JOIN LeaveEntitlement en
+       ON en.LeaveTypeId = t.Id AND en.EnrollNumber = $e AND en.Year = $y
+WHERE t.Active = 1
+ORDER BY t.Id;";
+                cmd.Parameters.AddWithValue("$e", enrollNumber ?? string.Empty);
+                cmd.Parameters.AddWithValue("$y", year);
+                cmd.Parameters.AddWithValue("$yr", year.ToString());
+                using (var r = cmd.ExecuteReader())
+                    while (r.Read())
+                        list.Add(new LeaveBalance
+                        {
+                            LeaveTypeId = r.GetInt64(0),
+                            TypeCode = r.GetString(1),
+                            TypeName = r.GetString(2),
+                            Paid = r.GetInt32(3) != 0,
+                            Year = year,
+                            Entitled = r.GetDouble(4),
+                            Taken = Convert.ToDouble(r.GetValue(5))
+                        });
+            }
+            return list;
+        }
+
+        public IReadOnlyList<LeaveEntry> GetLeaveEntries(string enrollNumber, int year)
+        {
+            var list = new List<LeaveEntry>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+SELECT Id, EnrollNumber, LeaveTypeId, Date, Reason, CreatedAt
+FROM LeaveEntry WHERE EnrollNumber = $e AND substr(Date, 1, 4) = $yr ORDER BY Date;";
+                cmd.Parameters.AddWithValue("$e", enrollNumber ?? string.Empty);
+                cmd.Parameters.AddWithValue("$yr", year.ToString());
+                using (var r = cmd.ExecuteReader())
+                    while (r.Read())
+                        list.Add(new LeaveEntry
+                        {
+                            Id = r.GetInt64(0),
+                            EnrollNumber = r.GetString(1),
+                            LeaveTypeId = r.GetInt64(2),
+                            Date = ParseTime(r.GetString(3)),
+                            Reason = r.IsDBNull(4) ? null : r.GetString(4),
+                            CreatedAt = ParseTime(r.GetString(5))
+                        });
+            }
+            return list;
+        }
+
+        /// <summary>Records a single leave day; ignored (returns false) if that day already has one.</summary>
+        public bool InsertLeaveEntry(LeaveEntry e)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                // One leave day per (employee, date): a second add for the same day is a no-op.
+                cmd.CommandText = @"
+INSERT INTO LeaveEntry (EnrollNumber, LeaveTypeId, Date, Reason, CreatedAt)
+SELECT $e, $t, $d, $reason, $at
+WHERE NOT EXISTS (SELECT 1 FROM LeaveEntry WHERE EnrollNumber = $e AND Date = $d);";
+                cmd.Parameters.AddWithValue("$e", e.EnrollNumber ?? string.Empty);
+                cmd.Parameters.AddWithValue("$t", e.LeaveTypeId);
+                cmd.Parameters.AddWithValue("$d", e.Date.ToString(DateFormat));
+                cmd.Parameters.AddWithValue("$reason", (object)e.Reason ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("$at", DateTime.Now.ToString(TimeFormat));
+                return cmd.ExecuteNonQuery() > 0;
+            }
+        }
+
+        public void DeleteLeaveEntry(long id)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "DELETE FROM LeaveEntry WHERE Id=$id;";
+                cmd.Parameters.AddWithValue("$id", id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>Leave taken on a given date — each as (EnrollNumber, TypeName, Paid). Used by the calc engine.</summary>
+        public List<(string Enroll, string TypeName, bool Paid)> GetLeaveOn(DateTime date)
+        {
+            var list = new List<(string, string, bool)>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+SELECT le.EnrollNumber, t.Name, t.Paid FROM LeaveEntry le
+JOIN LeaveType t ON t.Id = le.LeaveTypeId
+WHERE le.Date = $d;";
+                cmd.Parameters.AddWithValue("$d", date.ToString(DateFormat));
+                using (var r = cmd.ExecuteReader())
+                    while (r.Read())
+                        list.Add((r.GetString(0), r.GetString(1), r.GetInt32(2) != 0));
+            }
+            return list;
+        }
+
         /// <summary>
         /// True if the given date is a non-working day: a weekly off-day (e.g. Sun/Sat),
         /// an exact-dated holiday, or a recurring month/day holiday.
@@ -528,11 +789,61 @@ FROM RawPunch WHERE EnrollNumber = $e AND substr(Timestamp, 1, 10) = $d ORDER BY
         public void DeletePunch(long id)
         {
             using (var conn = Open())
+            {
+                // Tombstone the device-original (enroll, timestamp) first so the next
+                // on-connect backfill doesn't silently re-import the punch we're deleting.
+                using (var read = conn.CreateCommand())
+                {
+                    read.CommandText = "SELECT EnrollNumber, Timestamp FROM RawPunch WHERE Id=$id;";
+                    read.Parameters.AddWithValue("$id", id);
+                    using (var r = read.ExecuteReader())
+                        if (r.Read()) SuppressDevicePunch(conn, r.GetString(0), r.GetString(1), "deleted");
+                }
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "DELETE FROM RawPunch WHERE Id=$id;";
+                    cmd.Parameters.AddWithValue("$id", id);
+                    cmd.ExecuteNonQuery();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Records that a device-original punch (EnrollNumber + the timestamp string the
+        /// device reported) must not be re-imported by backfill — used when the user
+        /// deletes a punch or edits its time. Safe to call repeatedly.
+        /// </summary>
+        public void SuppressDevicePunch(string enrollNumber, DateTime timestamp, string reason)
+        {
+            using (var conn = Open())
+                SuppressDevicePunch(conn, enrollNumber, timestamp.ToString(TimeFormat), reason);
+        }
+
+        private void SuppressDevicePunch(SQLiteConnection conn, string enrollNumber, string timestamp, string reason)
+        {
             using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "DELETE FROM RawPunch WHERE Id=$id;";
-                cmd.Parameters.AddWithValue("$id", id);
+                cmd.CommandText = @"
+INSERT OR IGNORE INTO SuppressedPunch (EnrollNumber, Timestamp, Reason, SuppressedAt)
+VALUES ($enroll, $ts, $reason, $at);";
+                cmd.Parameters.AddWithValue("$enroll", enrollNumber ?? string.Empty);
+                cmd.Parameters.AddWithValue("$ts", timestamp);
+                cmd.Parameters.AddWithValue("$reason", reason ?? string.Empty);
+                cmd.Parameters.AddWithValue("$at", DateTime.Now.ToString(TimeFormat));
                 cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>True if this device-original (enroll, timestamp) was deleted/edited and must not be re-imported.</summary>
+        public bool IsPunchSuppressed(string enrollNumber, DateTime timestamp)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT 1 FROM SuppressedPunch WHERE EnrollNumber=$enroll AND Timestamp=$ts LIMIT 1;";
+                cmd.Parameters.AddWithValue("$enroll", enrollNumber ?? string.Empty);
+                cmd.Parameters.AddWithValue("$ts", timestamp.ToString(TimeFormat));
+                return cmd.ExecuteScalar() != null;
             }
         }
 
@@ -544,6 +855,19 @@ FROM RawPunch WHERE EnrollNumber = $e AND substr(Timestamp, 1, 10) = $d ORDER BY
             {
                 cmd.CommandText = "UPDATE RawPunch SET AttState=$s WHERE Id=$id;";
                 cmd.Parameters.AddWithValue("$s", attState);
+                cmd.Parameters.AddWithValue("$id", id);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>Corrects a punch's timestamp (e.g. a wrong device clock or a manual fix).</summary>
+        public void UpdatePunchTime(long id, DateTime timestamp)
+        {
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "UPDATE RawPunch SET Timestamp=$ts WHERE Id=$id;";
+                cmd.Parameters.AddWithValue("$ts", timestamp.ToString(TimeFormat));
                 cmd.Parameters.AddWithValue("$id", id);
                 cmd.ExecuteNonQuery();
             }

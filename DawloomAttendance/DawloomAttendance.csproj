@@ -133,6 +133,10 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Views\LeavesWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Page Include="Views\AttendanceWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
@@ -177,6 +181,10 @@
       <DependentUpon>Views\HolidaysWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Views\LeavesWindow.xaml.cs">
+      <DependentUpon>Views\LeavesWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="Views\AttendanceWindow.xaml.cs">
       <DependentUpon>Views\AttendanceWindow.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -213,6 +221,8 @@
     <Compile Include="Data\Entities\Employee.cs" />
     <Compile Include="Data\Entities\Shift.cs" />
     <Compile Include="Data\Entities\Holiday.cs" />
+    <Compile Include="Data\Entities\LeaveType.cs" />
+    <Compile Include="Data\Entities\LeaveEntry.cs" />
     <Compile Include="Services\BackfillService.cs" />
     <Compile Include="Services\LoggingSetup.cs" />
     <Compile Include="Services\DailyAttendance.cs" />

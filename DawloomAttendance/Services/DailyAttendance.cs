@@ -40,6 +40,12 @@ namespace DawloomAttendance.Services
         /// <summary>Why the day is off (e.g. "Weekend", "Eid", a leave reason).</summary>
         public string OffReason { get; set; }
 
+        /// <summary>True when this off-day is a recorded leave entry (not a weekend/holiday).</summary>
+        public bool IsLeave { get; set; }
+
+        /// <summary>True when the leave is of a paid type, so it still counts toward pay.</summary>
+        public bool PaidLeave { get; set; }
+
         public string Status
         {
             get

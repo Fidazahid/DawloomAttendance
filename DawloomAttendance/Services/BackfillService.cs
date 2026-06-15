@@ -34,6 +34,11 @@ namespace DawloomAttendance.Services
             foreach (var p in device.ReadAllLogs(machineNumber))
             {
                 result.Read++;
+
+                // Don't resurrect a punch the user deliberately deleted or whose time
+                // they edited — the device still holds the original, but we suppress it.
+                if (db.IsPunchSuppressed(p.EnrollNumber, p.Timestamp)) { result.Skipped++; continue; }
+
                 var raw = new RawPunch
                 {
                     EnrollNumber = p.EnrollNumber,

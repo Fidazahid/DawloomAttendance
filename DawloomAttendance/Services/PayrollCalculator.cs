@@ -26,13 +26,20 @@ namespace DawloomAttendance.Services
                 double salary = emp?.Salary ?? 0;
                 double shiftHours = ShiftHours(shift);
 
-                int workingDays = g.Count(x => x.IsWorkingDay);
+                // Leave days are scheduled work-days the person would otherwise work, so they
+                // belong in the working-day divisor. Paid leave is then paid like a present day;
+                // unpaid leave stays in the divisor but not the payable count, so it's deducted.
+                // (A day where the person was on leave but still punched counts as present, not leave.)
+                int paidLeave = g.Count(x => x.IsLeave && x.PaidLeave && !x.Present);
+                int unpaidLeave = g.Count(x => x.IsLeave && !x.PaidLeave && !x.Present);
+
                 int present = g.Count(x => x.Present);
+                int workingDays = g.Count(x => x.IsWorkingDay) + paidLeave + unpaidLeave;
                 int lateCount = g.Count(x => x.Late);
                 double otHours = g.Sum(x => x.OvertimeHours);
 
                 double lateDeductionDays = latesPerDeduction > 0 ? (double)lateCount / latesPerDeduction : 0;
-                double payableDays = Math.Max(0, present - lateDeductionDays);
+                double payableDays = Math.Max(0, present + paidLeave - lateDeductionDays);
 
                 double dailyRate = workingDays > 0 ? salary / workingDays : 0;
                 double basePay = payableDays * dailyRate;
@@ -50,8 +57,9 @@ namespace DawloomAttendance.Services
                     WorkingDays = workingDays,
                     Present = present,
                     Absent = g.Count(x => x.Absent),
-                    LeaveDays = g.Count(x => x.Category == DayCategory.Off &&
-                        !string.IsNullOrEmpty(x.OffReason) && x.OffReason != "Weekend"),
+                    LeaveDays = paidLeave + unpaidLeave,
+                    PaidLeaveDays = paidLeave,
+                    UnpaidLeaveDays = unpaidLeave,
                     LateCount = lateCount,
                     LateMinutes = g.Where(x => x.Late).Sum(x => x.LateMinutes),
                     WorkedHours = g.Sum(x => x.WorkedHours),

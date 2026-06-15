@@ -105,6 +105,12 @@ namespace DawloomAttendance
             ShowPage(new Views.HolidaysWindow(_db));
         }
 
+        private void NavLeaves_Click(object sender, RoutedEventArgs e)
+        {
+            if (_db == null) { Log("[FAIL] Database unavailable."); return; }
+            ShowPage(new Views.LeavesWindow(_db));
+        }
+
         private void NavAttendance_Click(object sender, RoutedEventArgs e)
         {
             if (_db == null) { Log("[FAIL] Database unavailable."); return; }

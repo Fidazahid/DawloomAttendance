@@ -13,7 +13,9 @@ namespace DawloomAttendance.Services
         public int WorkingDays { get; set; }
         public int Present { get; set; }
         public int Absent { get; set; }
-        public int LeaveDays { get; set; }
+        public int LeaveDays { get; set; }        // total recorded leave days (paid + unpaid)
+        public int PaidLeaveDays { get; set; }    // counts toward pay
+        public int UnpaidLeaveDays { get; set; }  // deducted from pay
         public int LateCount { get; set; }
         public int LateMinutes { get; set; }
         public double WorkedHours { get; set; }

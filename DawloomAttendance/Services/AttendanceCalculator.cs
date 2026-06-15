@@ -19,6 +19,24 @@ namespace DawloomAttendance.Services
     /// </summary>
     public static class AttendanceCalculator
     {
+        // For an overnight shift, the work-date window starts this long before the
+        // scheduled start so a slightly-early check-in still counts toward the right day.
+        // The window is exactly 24h wide, so days never overlap or drop a punch.
+        private static readonly TimeSpan OvernightLookback = TimeSpan.FromHours(3);
+
+        // Punches the device tags as a closing punch (check-out / overtime-out). If a day
+        // has at least one of these, we pair first→last; if it has none (only check-ins),
+        // it's "check-in only" so duplicate check-ins aren't mistaken for a check-out.
+        private static readonly HashSet<int> OutStates = new HashSet<int> { 1, 5 };  // Check-Out, Overtime-Out
+
+        /// <summary>True when the shift's end-of-day is at/before its start (it crosses midnight).</summary>
+        public static bool IsOvernightShift(Shift shift)
+        {
+            var s = ParseTime(shift?.StartTime);
+            var e = ParseTime(shift?.EndTime);
+            return s.HasValue && e.HasValue && e.Value <= s.Value;
+        }
+
         public static DailyAttendance Calculate(
             string enrollNumber, DateTime date, IEnumerable<RawPunch> punches, Shift shift,
             bool isNonWorkingDay, string offReason = null)
@@ -31,22 +49,60 @@ namespace DawloomAttendance.Services
                 OffReason = isNonWorkingDay ? offReason : null
             };
 
-            var ordered = (punches ?? Enumerable.Empty<RawPunch>())
-                .Where(p => p.Timestamp.Date == date.Date)
-                .OrderBy(p => p.Timestamp)
-                .ToList();
+            // Resolve the shift window up front; it also decides how we bucket punches.
+            var start = ParseTime(shift?.StartTime);
+            var end = ParseTime(shift?.EndTime);
+            bool hasShiftTimes = shift != null && start.HasValue && end.HasValue;
+
+            DateTime shiftStart = default, shiftEnd = default;
+            bool overnight = false;
+            if (hasShiftTimes)
+            {
+                shiftStart = date.Date + start.Value;
+                shiftEnd = date.Date + end.Value;
+                if (shiftEnd <= shiftStart) { shiftEnd = shiftEnd.AddDays(1); overnight = true; }
+            }
+
+            // Pick the punches belonging to this work-date. A normal shift uses the
+            // calendar day; an overnight shift uses a 24h window anchored just before
+            // the shift start, so tonight's check-in and tomorrow morning's check-out
+            // are paired on the day the shift began (instead of looking like two
+            // separate "check-in only" days).
+            IEnumerable<RawPunch> inWindow;
+            if (overnight)
+            {
+                var windowStart = shiftStart - OvernightLookback;
+                var windowEnd = windowStart.AddDays(1);
+                inWindow = (punches ?? Enumerable.Empty<RawPunch>())
+                    .Where(p => p.Timestamp >= windowStart && p.Timestamp < windowEnd);
+            }
+            else
+            {
+                inWindow = (punches ?? Enumerable.Empty<RawPunch>())
+                    .Where(p => p.Timestamp.Date == date.Date);
+            }
+
+            var ordered = inWindow.OrderBy(p => p.Timestamp).ToList();
 
             da.PunchCount = ordered.Count;
             if (ordered.Count > 0)
             {
-                da.FirstPunch = ordered.First().Timestamp;
                 da.Present = true;
 
-                // Check-out only exists when there's a distinct later punch. A lone
-                // check-in leaves check-out (and worked hours) empty.
-                if (ordered.Count >= 2)
+                // IN  = first punch, OUT = last punch (by time) — paired only when the day
+                //       actually contains a check-out punch. If every punch is a check-in
+                //       (badged in once or several times, never out), it's "check-in only"
+                //       with no hours, so two or three check-ins are never mistaken for a
+                //       check-out. Mis-ordered/mis-tagged punches still pair by time.
+                var first = ordered.First();
+                var last = ordered.Last();
+                bool hasCheckout = ordered.Any(p => OutStates.Contains(p.AttState));
+
+                da.FirstPunch = first.Timestamp;
+
+                if (hasCheckout && last.Timestamp > first.Timestamp)
                 {
-                    da.LastPunch = ordered.Last().Timestamp;
+                    da.LastPunch = last.Timestamp;
                     da.WorkedHours = Math.Round((da.LastPunch.Value - da.FirstPunch.Value).TotalHours, 2);
                 }
                 else
@@ -72,14 +128,8 @@ namespace DawloomAttendance.Services
             }
 
             // Working day with punches → classify against the shift if we have valid times.
-            var start = ParseTime(shift?.StartTime);
-            var end = ParseTime(shift?.EndTime);
-            if (shift != null && start.HasValue && end.HasValue)
+            if (hasShiftTimes)
             {
-                var shiftStart = date.Date + start.Value;
-                var shiftEnd = date.Date + end.Value;
-                if (shiftEnd <= shiftStart) shiftEnd = shiftEnd.AddDays(1); // overnight shift
-
                 // Lateness is judged from the check-in (available even without a check-out).
                 double arrivalDelay = (da.FirstPunch.Value - shiftStart).TotalMinutes;
                 if (arrivalDelay > shift.GraceMinutes)

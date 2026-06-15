@@ -154,10 +154,24 @@ namespace DawloomAttendance.Views
 
         private void AddButton_Click(object sender, RoutedEventArgs e)
         {
-            var emp = new Employee { Active = true };
+            // Pre-fill the next free Enroll # so the row is valid out of the box (no more
+            // "needs an Enroll #" on save). It stays editable — match it to the user ID
+            // you give the person on the device, or just Import from the device instead.
+            var emp = new Employee { Active = true, EnrollNumber = NextFreeEnroll(), ShiftId = NoShiftId };
             _employees.Add(emp);
             Grid.SelectedItem = emp;
             Grid.ScrollIntoView(emp);
+        }
+
+        /// <summary>Lowest positive integer Enroll # not already used by a row in the grid.</summary>
+        private string NextFreeEnroll()
+        {
+            var taken = new HashSet<int>();
+            foreach (var emp in _employees)
+                if (int.TryParse(emp.EnrollNumber, out var n)) taken.Add(n);
+            int free = 1;
+            while (taken.Contains(free)) free++;
+            return free.ToString();
         }
 
         private void DeleteButton_Click(object sender, RoutedEventArgs e)

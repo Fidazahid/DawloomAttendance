@@ -29,7 +29,23 @@ namespace DawloomAttendance.Services
             var employeeHoliday = hols.Where(h => !string.IsNullOrEmpty(h.Key))
                 .GroupBy(h => h.Key).ToDictionary(g => g.Key, g => g.First().Value);
 
-            var punchesByEnroll = _db.GetPunchesForDate(date)
+            // Recorded leave on this date, keyed by employee (one leave per person per day).
+            var leaveByEnroll = _db.GetLeaveOn(date)
+                .GroupBy(l => l.Enroll)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            // Overnight shifts span into the next calendar day, so pull tomorrow's
+            // punches too when any employee works one — the calculator pairs the
+            // late check-in with the next-morning check-out on this work-date.
+            bool anyOvernight = employees.Any(e =>
+                e.ShiftId.HasValue && shifts.TryGetValue(e.ShiftId.Value, out var os)
+                && AttendanceCalculator.IsOvernightShift(os));
+
+            IEnumerable<RawPunch> dayPunches = _db.GetPunchesForDate(date);
+            if (anyOvernight)
+                dayPunches = dayPunches.Concat(_db.GetPunchesForDate(date.AddDays(1)));
+
+            var punchesByEnroll = dayPunches
                 .GroupBy(p => p.EnrollNumber)
                 .ToDictionary(g => g.Key, g => (IEnumerable<RawPunch>)g.ToList());
 
@@ -45,14 +61,23 @@ namespace DawloomAttendance.Services
 
                 bool empHoliday = employeeHoliday.TryGetValue(e.EnrollNumber, out var empReason);
                 bool isHoliday = companyHoliday || empHoliday;
+
+                // Typed leave takes the off-reason over a weekend, but a company/employee
+                // holiday still wins (the person is off regardless, and balance isn't spent).
+                bool hasLeave = leaveByEnroll.TryGetValue(e.EnrollNumber, out var leave) && !isHoliday;
+
                 string offReason = isHoliday
                     ? (companyHoliday ? (companyReason ?? "Holiday") : (empReason ?? "Leave"))
+                    : hasLeave ? leave.TypeName + " Leave"
                     : (isWeekend ? "Weekend" : null);
 
-                bool isOff = isWeekend || isHoliday;
+                bool isOff = isWeekend || isHoliday || hasLeave;
 
                 punchesByEnroll.TryGetValue(e.EnrollNumber, out var punches);
-                results.Add(AttendanceCalculator.Calculate(e.EnrollNumber, date, punches, shift, isOff, offReason));
+                var da = AttendanceCalculator.Calculate(e.EnrollNumber, date, punches, shift, isOff, offReason);
+                da.IsLeave = hasLeave;
+                da.PaidLeave = hasLeave && leave.Paid;
+                results.Add(da);
             }
             return results;
         }

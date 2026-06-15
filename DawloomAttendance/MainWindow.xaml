@@ -55,6 +55,7 @@
                 <Button Style="{StaticResource NavButton}" Content="Dashboard" Click="NavDashboard_Click" />
                 <Button Style="{StaticResource NavButton}" Content="Employees" Click="NavEmployees_Click" />
                 <Button Style="{StaticResource NavButton}" Content="Holidays" Click="NavHolidays_Click" />
+                <Button Style="{StaticResource NavButton}" Content="Leaves" Click="NavLeaves_Click" />
                 <Button Style="{StaticResource NavButton}" Content="Attendance" Click="NavAttendance_Click" />
                 <Button Style="{StaticResource NavButton}" Content="Reports" Click="NavReports_Click" />
                 <Button Style="{StaticResource NavButton}" Content="Backup" Click="NavBackup_Click" />

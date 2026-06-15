@@ -1,0 +1,71 @@
+<UserControl x:Class="DawloomAttendance.Views.LeavesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Employee + year selector -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+            <TextBlock Text="Employee:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="SemiBold" />
+            <ComboBox x:Name="EmployeeBox" Width="220" VerticalAlignment="Center" Margin="0,0,16,0"
+                      DisplayMemberPath="Display" SelectedValuePath="Enroll"
+                      SelectionChanged="Selection_Changed" />
+            <TextBlock Text="Year:" VerticalAlignment="Center" Margin="0,0,6,0" FontWeight="SemiBold" />
+            <ComboBox x:Name="YearBox" Width="90" VerticalAlignment="Center" Margin="0,0,16,0"
+                      SelectionChanged="Selection_Changed" />
+            <Button x:Name="RefreshButton" Content="Refresh" Width="80" Height="28" Click="RefreshButton_Click" />
+        </StackPanel>
+
+        <!-- Balances (entitled / taken / remaining) — Entitled is editable -->
+        <Border Grid.Row="1" BorderBrush="#FFCCCCCC" BorderThickness="1" Padding="8" Margin="0,0,0,10">
+            <StackPanel>
+                <TextBlock Text="Leave balances (edit Entitled to set this employee's yearly allowance)"
+                           FontWeight="SemiBold" Margin="0,0,0,6" />
+                <DataGrid x:Name="BalanceGrid" AutoGenerateColumns="False" CanUserAddRows="False"
+                          HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                          CellEditEnding="BalanceGrid_CellEditEnding" MaxHeight="160">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Type" Binding="{Binding TypeName}" Width="140" IsReadOnly="True" />
+                        <DataGridCheckBoxColumn Header="Paid" Binding="{Binding Paid}" Width="60" IsReadOnly="True" />
+                        <DataGridTextColumn Header="Entitled" Binding="{Binding Entitled, StringFormat=0.##}" Width="90" />
+                        <DataGridTextColumn Header="Taken" Binding="{Binding Taken, StringFormat=0.##}" Width="80" IsReadOnly="True" />
+                        <DataGridTextColumn Header="Remaining" Binding="{Binding Remaining, StringFormat=0.##}" Width="90" IsReadOnly="True" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
+        </Border>
+
+        <!-- Recorded leave entries for this employee/year -->
+        <DataGrid Grid.Row="2" x:Name="EntryGrid" AutoGenerateColumns="False" CanUserAddRows="False"
+                  GridLinesVisibility="Horizontal" HeadersVisibility="Column">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Date" Binding="{Binding Date, StringFormat=yyyy-MM-dd}" Width="120" IsReadOnly="True" />
+                <DataGridTextColumn Header="Type" Binding="{Binding TypeName}" Width="140" IsReadOnly="True" />
+                <DataGridTextColumn Header="Reason" Binding="{Binding Reason}" Width="*" IsReadOnly="True" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Add leave (a date range expands to one entry per day) -->
+        <Border Grid.Row="3" BorderBrush="#FFCCCCCC" BorderThickness="1" Padding="8" Margin="0,10,0,0">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Add leave —" VerticalAlignment="Center" Margin="0,0,8,0" FontWeight="SemiBold" />
+                <TextBlock Text="Type:" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <ComboBox x:Name="TypeBox" Width="120" VerticalAlignment="Center" Margin="0,0,12,0"
+                          DisplayMemberPath="Name" SelectedValuePath="Id" />
+                <TextBlock Text="From:" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <DatePicker x:Name="FromDate" Width="120" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <TextBlock Text="To:" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <DatePicker x:Name="ToDate" Width="120" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <TextBlock Text="Reason:" VerticalAlignment="Center" Margin="0,0,4,0" />
+                <TextBox x:Name="ReasonBox" Width="150" VerticalAlignment="Center" Margin="0,0,12,0" />
+                <Button Content="Add" Width="70" Height="28" Margin="0,0,8,0" Click="AddLeave_Click" />
+                <Button Content="Delete selected" Width="110" Height="28" Click="DeleteLeave_Click" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
