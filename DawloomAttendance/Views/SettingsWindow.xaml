@@ -1,57 +1,105 @@
 <Window x:Class="DawloomAttendance.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Device Settings" Height="340" Width="380"
-        WindowStartupLocation="CenterOwner" ResizeMode="NoResize" ShowInTaskbar="False">
+        Title="Settings" Height="640" Width="460"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize" ShowInTaskbar="False">
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
 
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="IP Address" Margin="0,0,12,8" VerticalAlignment="Center" />
-            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="IpBox" Margin="0,0,0,8" />
+                <!-- ZKTeco device -->
+                <GroupBox Header="ZKTeco Device" Padding="8" Margin="0,0,0,12">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="Port" Margin="0,0,12,8" VerticalAlignment="Center" />
-            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="PortBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="IP Address" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="0" Grid.Column="1" x:Name="IpBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Port" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="1" Grid.Column="1" x:Name="PortBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Comm Key" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="2" Grid.Column="1" x:Name="CommKeyBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Machine #" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="3" Grid.Column="1" x:Name="MachineBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Reconnect (s)" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="4" Grid.Column="1" x:Name="ReconnectBox" Margin="0,0,0,8"
+                                   ToolTip="Seconds to wait between reconnect attempts." />
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Keep-alive (s)" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="5" Grid.Column="1" x:Name="KeepAliveBox" Margin="0,0,0,8"
+                                   ToolTip="Seconds between keep-alive pings while connected." />
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Event Mask" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="6" Grid.Column="1" x:Name="EventMaskBox" Margin="0,0,0,8"
+                                   ToolTip="Real-time event mask (65535 = all events)." />
+                        <CheckBox  Grid.Row="7" Grid.Column="1" x:Name="SyncTimeBox" Content="Sync device clock to PC on connect"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </GroupBox>
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Text="Comm Key" Margin="0,0,12,8" VerticalAlignment="Center" />
-            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="CommKeyBox" Margin="0,0,0,8" />
+                <!-- Email / SMTP -->
+                <GroupBox Header="Email (SMTP) — for sending reports" Padding="8">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
-            <TextBlock Grid.Row="3" Grid.Column="0" Text="Machine #" Margin="0,0,12,8" VerticalAlignment="Center" />
-            <TextBox   Grid.Row="3" Grid.Column="1" x:Name="MachineBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="SMTP host" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="0" Grid.Column="1" x:Name="SmtpHostBox" Margin="0,0,0,8"
+                                   ToolTip="e.g. smtp.gmail.com" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="SMTP port" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="1" Grid.Column="1" x:Name="SmtpPortBox" Margin="0,0,0,8"
+                                   ToolTip="587 (TLS) or 465 (SSL)." />
+                        <CheckBox  Grid.Row="2" Grid.Column="1" x:Name="SmtpSslBox" Content="Use SSL/TLS" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="From address" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="3" Grid.Column="1" x:Name="FromAddressBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="From name" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="4" Grid.Column="1" x:Name="FromNameBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Username" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="5" Grid.Column="1" x:Name="SmtpUserBox" Margin="0,0,0,8"
+                                   ToolTip="Usually the full email address." />
+                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Password" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <PasswordBox Grid.Row="6" Grid.Column="1" x:Name="SmtpPassBox" Margin="0,0,0,8"
+                                     ToolTip="For Gmail, use a Google App Password." />
+                        <CheckBox  Grid.Row="7" Grid.Column="1" x:Name="AutoSendBox" Margin="0,0,0,8"
+                                   Content="Automatically email weekly/monthly reports" />
 
-            <TextBlock Grid.Row="4" Grid.Column="0" Text="Reconnect (s)" Margin="0,0,12,8" VerticalAlignment="Center" />
-            <TextBox   Grid.Row="4" Grid.Column="1" x:Name="ReconnectBox" Margin="0,0,0,8"
-                       ToolTip="Seconds to wait between reconnect attempts." />
+                        <TextBlock Grid.Row="8" Grid.Column="0" Text="Weekly subject" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="8" Grid.Column="1" x:Name="SubjWeeklyBox" Margin="0,0,0,8"
+                                   ToolTip="Use {Name} and {Period} placeholders." />
+                        <TextBlock Grid.Row="9" Grid.Column="0" Text="Monthly subject" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="9" Grid.Column="1" x:Name="SubjMonthlyBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="10" Grid.Column="0" Text="Manual subject" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="10" Grid.Column="1" x:Name="SubjManualBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="11" Grid.Column="0" Text="Slip subject" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="11" Grid.Column="1" x:Name="SubjSlipBox" Margin="0,0,0,8" />
+                    </Grid>
+                </GroupBox>
 
-            <TextBlock Grid.Row="5" Grid.Column="0" Text="Keep-alive (s)" Margin="0,0,12,8" VerticalAlignment="Center" />
-            <TextBox   Grid.Row="5" Grid.Column="1" x:Name="KeepAliveBox" Margin="0,0,0,8"
-                       ToolTip="Seconds between keep-alive pings while connected." />
-
-            <TextBlock Grid.Row="6" Grid.Column="0" Text="Event Mask" Margin="0,0,12,8" VerticalAlignment="Center" />
-            <TextBox   Grid.Row="6" Grid.Column="1" x:Name="EventMaskBox" Margin="0,0,0,8"
-                       ToolTip="Real-time event mask (65535 = all events)." />
-
-            <CheckBox  Grid.Row="7" Grid.Column="1" x:Name="SyncTimeBox" Content="Sync device clock to PC on connect"
-                       VerticalAlignment="Center" />
-        </Grid>
+                <Button x:Name="TestEmailButton" Content="Send test email to From address" Height="28"
+                        Margin="0,10,0,0" HorizontalAlignment="Left" Width="240" Click="TestEmail_Click" />
+            </StackPanel>
+        </ScrollViewer>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
             <Button x:Name="OkButton" Content="Save" Width="90" Height="28" IsDefault="True"

@@ -22,6 +22,7 @@ namespace DawloomAttendance
         private readonly ZkConnectionMonitor _monitor;
         private AppDb _db;
         private DeviceSettings _settings;       // current device target, edited via the Settings dialog
+        private EmailSettings _email;           // SMTP config for emailing reports, edited via the Settings dialog
         private int _machineNumber = 1;         // captured when the monitor starts (avoids UI access off-thread)
         private bool _connectErrorShown;        // so we pop the error dialog once per connect attempt, not every retry
 
@@ -30,6 +31,7 @@ namespace DawloomAttendance
             InitializeComponent();
 
             _settings = DeviceSettings.Load();
+            _email = EmailSettings.Load();
             UpdateTargetText();
 
             InitDatabase();
@@ -151,13 +153,16 @@ namespace DawloomAttendance
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new Views.SettingsWindow(_settings) { Owner = this };
+            var dialog = new Views.SettingsWindow(_settings, _email) { Owner = this };
             if (dialog.ShowDialog() == true)
             {
                 _settings = dialog.Result;
                 _settings.Save();             // persist so a re-point survives restart
+                _email = dialog.EmailResult;
+                _email.Save();
                 UpdateTargetText();
-                Log($"Settings saved → {_settings.Ip}:{_settings.Port}, machine #{_settings.MachineNumber}.");
+                Log($"Settings saved → {_settings.Ip}:{_settings.Port}, machine #{_settings.MachineNumber}" +
+                    (_email.IsConfigured ? $"; email via {_email.Host}" : "; email not configured") + ".");
             }
         }
 
