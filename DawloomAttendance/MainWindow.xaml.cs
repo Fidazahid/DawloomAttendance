@@ -183,7 +183,12 @@ namespace DawloomAttendance
             PageHost.Visibility = Visibility.Visible;
         }
 
-        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        private void SettingsButton_Click(object sender, RoutedEventArgs e) => OpenSettings();
+
+        // Sidebar entry — always available (device may be connected; email config is independent).
+        private void NavSettings_Click(object sender, RoutedEventArgs e) => OpenSettings();
+
+        private void OpenSettings()
         {
             var dialog = new Views.SettingsWindow(_settings, _email) { Owner = this };
             if (dialog.ShowDialog() == true)

@@ -60,6 +60,7 @@
                 <Button Style="{StaticResource NavButton}" Content="Reports" Click="NavReports_Click" />
                 <Button Style="{StaticResource NavButton}" Content="Backup" Click="NavBackup_Click" />
                 <Button Style="{StaticResource NavButton}" Content="Audit" Click="NavAudit_Click" />
+                <Button Style="{StaticResource NavButton}" Content="Settings" Click="NavSettings_Click" />
             </StackPanel>
         </Border>
 
