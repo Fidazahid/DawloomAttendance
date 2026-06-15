@@ -154,7 +154,7 @@ namespace DawloomAttendance.Views
             t.Columns.Add("Enroll"); t.Columns.Add("Name"); t.Columns.Add("CNIC");
             t.Columns.Add("Department"); t.Columns.Add("Designation"); t.Columns.Add("Shift");
             t.Columns.Add("Working days"); t.Columns.Add("Present"); t.Columns.Add("Absent");
-            t.Columns.Add("Leave/Holiday"); t.Columns.Add("Late count"); t.Columns.Add("Late time");
+            t.Columns.Add("Paid leave"); t.Columns.Add("Unpaid leave"); t.Columns.Add("Late count"); t.Columns.Add("Late time");
             t.Columns.Add("Worked"); t.Columns.Add("Overtime");
             t.Columns.Add("Late deduction (days)"); t.Columns.Add("Payable days");
             t.Columns.Add("Salary"); t.Columns.Add("Overtime pay"); t.Columns.Add("Net pay");
@@ -163,7 +163,7 @@ namespace DawloomAttendance.Views
             {
                 t.Rows.Add(
                     s.Enroll, s.Name, s.Cnic, s.Department, s.Designation, s.Shift,
-                    s.WorkingDays, s.Present, s.Absent, s.LeaveDays, s.LateCount,
+                    s.WorkingDays, s.Present, s.Absent, s.PaidLeaveDays, s.UnpaidLeaveDays, s.LateCount,
                     DurationFormat.Minutes(s.LateMinutes),
                     DurationFormat.Hours(s.WorkedHours),
                     DurationFormat.Hours(s.OvertimeHours),
