@@ -20,7 +20,8 @@ real connect, live punch capture, backfill of 1004+ records, attendance calc, re
   auto-reconnect + keep-alive monitor; device-time sync; Serilog file log + `DeviceLog` table; settings.
 - **Phase 2 — Employees/Shifts/Holidays:** employee CRUD + "Import from Device"; shift templates +
   per-employee assignment; holiday calendar (dated, yearly-recurring, **weekly off-days scoped by month**,
-  per-employee leave with reason); two-way device sync (push/remove user). *(Excel bulk import skipped.)*
+  per-employee leave with reason); two-way device sync (push/remove user); **Excel bulk employee import**
+  (upsert by Enroll #, shift-by-name, downloadable template) with unit tests.
 - **Phase 3 — Calculation engine:** pure `AttendanceCalculator` (first/last punch, late+grace, early,
   worked hours, overtime, half/full/absent/off) with unit tests; attendance viewer (Check-In/Out columns);
   manual punch correction (add missed punch, delete, convert in/out) from Dashboard & Attendance.
@@ -44,13 +45,14 @@ real connect, live punch capture, backfill of 1004+ records, attendance calc, re
     with the calc engine (typed off-reason) + payroll (paid leave is payable, unpaid is deducted).
     Covered by `DawloomAttendance.Tests` (MSTest, x86) — 12 tests across payroll math, the leave
     data layer, and the attendance service. Run via `run-tests.ps1`.
-- **Phase 6:** role-based access (Admin/HR/Manager).
+- **Phase 6:** role-based access (Admin/HR/Manager) — **deferred** (skipped for now; audit-log
+  actor stays the Windows user until login is added).
   - ✅ **Audit log of changes**: `AuditLog` table + trail recording who/when/what for punch
     delete/edit, employee add/update/delete, and leave add/remove/entitlement changes; an
     **Audit** sidebar viewer (date + user filter). Actor defaults to the Windows user and
     will switch to the app user once RBAC/login lands. Covered by 5 tests in `DawloomAttendance.Tests`.
 - **Phase 7:** single-file installer (Inno Setup/Velopack); User Manual + Admin Guide PDFs; training; handover.
-- **Optional:** Excel bulk employee import; .NET 8 + MVVM migration.
+- **Optional:** ✅ Excel bulk employee import (done — see Phase 2); .NET 8 + MVVM migration.
 
 ---
 

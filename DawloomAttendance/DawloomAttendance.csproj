@@ -238,6 +238,7 @@
     <Compile Include="Services\AttendanceCalculator.cs" />
     <Compile Include="Services\AttendanceService.cs" />
     <Compile Include="Services\ExcelExport.cs" />
+    <Compile Include="Services\EmployeeImport.cs" />
     <Compile Include="Services\PdfExport.cs" />
     <Compile Include="Services\BackupService.cs" />
     <Compile Include="Services\SalarySlip.cs" />

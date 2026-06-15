@@ -97,6 +97,65 @@ namespace DawloomAttendance.Views
             }
         }
 
+        private async void ImportExcelButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Import employees from Excel",
+                Filter = "Excel workbook (*.xlsx)|*.xlsx",
+                CheckFileExists = true
+            };
+            if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
+
+            ImportExcelButton.IsEnabled = false;
+            StatusText.Text = "Importing from Excel …";
+            try
+            {
+                var result = await Task.Run(() => Services.EmployeeImport.FromExcel(dlg.FileName, _db));
+                Reload();
+
+                string msg = "Import complete — " + result + ".";
+                if (result.Errors.Count > 0)
+                    msg += "\n\n" + string.Join("\n", result.Errors.Take(15)) +
+                           (result.Errors.Count > 15 ? $"\n… and {result.Errors.Count - 15} more." : "");
+                MessageBox.Show(Window.GetWindow(this), msg, "Import from Excel",
+                    MessageBoxButton.OK,
+                    result.Errors.Count > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+                StatusText.Text = $"{_employees.Count} employees — imported {result.Added + result.Updated}.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Window.GetWindow(this), "Import failed: " + ex.Message,
+                    "Import from Excel", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                ImportExcelButton.IsEnabled = true;
+            }
+        }
+
+        private void TemplateButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "Save Excel import template",
+                Filter = "Excel workbook (*.xlsx)|*.xlsx",
+                FileName = "employees_template.xlsx"
+            };
+            if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
+
+            try
+            {
+                Services.EmployeeImport.WriteTemplate(dlg.FileName);
+                System.Diagnostics.Process.Start(dlg.FileName);   // open so the user can fill it in
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Window.GetWindow(this), "Could not create template: " + ex.Message,
+                    "Excel template", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private async void PushButton_Click(object sender, RoutedEventArgs e)
         {
             var selected = Grid.SelectedItems.Cast<Employee>()

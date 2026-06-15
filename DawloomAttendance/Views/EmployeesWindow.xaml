@@ -13,6 +13,12 @@
             <Button x:Name="ImportButton" Content="Import from Device" Width="140" Height="30" Margin="0,0,8,6"
                     Click="ImportButton_Click"
                     ToolTip="Pull enrolled users off the K70 and add any new ones as employees." />
+            <Button x:Name="ImportExcelButton" Content="Import from Excel" Width="135" Height="30" Margin="0,0,8,6"
+                    Click="ImportExcelButton_Click"
+                    ToolTip="Bulk add/update employees from an .xlsx file (matched by Enroll #)." />
+            <Button x:Name="TemplateButton" Content="Excel template…" Width="120" Height="30" Margin="0,0,8,6"
+                    Click="TemplateButton_Click"
+                    ToolTip="Save a blank .xlsx with the expected columns." />
             <Button x:Name="AddButton" Content="Add" Width="70" Height="30" Margin="0,0,8,6" Click="AddButton_Click" />
             <Button x:Name="DeleteButton" Content="Delete (local)" Width="100" Height="30" Margin="0,0,8,6" Click="DeleteButton_Click"
                     ToolTip="Remove the employee row from this app only (does not touch the device)." />
