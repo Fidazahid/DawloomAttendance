@@ -3,6 +3,25 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Settings" Height="640" Width="460"
         WindowStartupLocation="CenterOwner" ResizeMode="CanResize" ShowInTaskbar="False">
+    <Window.Resources>
+        <!-- A hoverable "?" help icon; set its ToolTip to a wrapping TextBlock per field. -->
+        <Style x:Key="Help" TargetType="TextBlock">
+            <Setter Property="Text" Value="?" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Background" Value="#FF1565C0" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="Padding" Value="0,1,0,0" />
+            <Setter Property="Margin" Value="6,0,0,8" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Help" />
+            <Setter Property="ToolTipService.ShowDuration" Value="60000" />
+            <Setter Property="ToolTipService.InitialShowDelay" Value="200" />
+        </Style>
+    </Window.Resources>
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
@@ -54,10 +73,9 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="130" />
                             <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
@@ -65,34 +83,59 @@
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="SMTP host" Margin="0,0,12,8" VerticalAlignment="Center" />
-                        <TextBox   Grid.Row="0" Grid.Column="1" x:Name="SmtpHostBox" Margin="0,0,0,8"
-                                   ToolTip="e.g. smtp.gmail.com" />
+                        <TextBox   Grid.Row="0" Grid.Column="1" x:Name="SmtpHostBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="0" Grid.Column="2" Style="{StaticResource Help}">
+                            <TextBlock.ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap"
+                                Text="The outgoing-mail server address. Gmail: smtp.gmail.com — Outlook/Office 365: smtp.office365.com. If unsure, search '&lt;your provider&gt; SMTP server' or ask your IT person." /></TextBlock.ToolTip>
+                        </TextBlock>
+
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="SMTP port" Margin="0,0,12,8" VerticalAlignment="Center" />
-                        <TextBox   Grid.Row="1" Grid.Column="1" x:Name="SmtpPortBox" Margin="0,0,0,8"
-                                   ToolTip="587 (TLS) or 465 (SSL)." />
+                        <TextBox   Grid.Row="1" Grid.Column="1" x:Name="SmtpPortBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="1" Grid.Column="2" Style="{StaticResource Help}">
+                            <TextBlock.ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap"
+                                Text="Use 587 for TLS (most common, e.g. Gmail) or 465 for SSL. Your provider's help page lists the right one." /></TextBlock.ToolTip>
+                        </TextBlock>
+
                         <CheckBox  Grid.Row="2" Grid.Column="1" x:Name="SmtpSslBox" Content="Use SSL/TLS" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="2" Grid.Column="2" Style="{StaticResource Help}">
+                            <TextBlock.ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap"
+                                Text="Leave this ticked — Gmail, Office 365 and virtually all providers require an encrypted connection." /></TextBlock.ToolTip>
+                        </TextBlock>
+
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="From address" Margin="0,0,12,8" VerticalAlignment="Center" />
                         <TextBox   Grid.Row="3" Grid.Column="1" x:Name="FromAddressBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="3" Grid.Column="2" Style="{StaticResource Help}">
+                            <TextBlock.ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap"
+                                Text="The email address reports are sent FROM — normally your own company/Gmail address (e.g. hr@yourcompany.com)." /></TextBlock.ToolTip>
+                        </TextBlock>
+
                         <TextBlock Grid.Row="4" Grid.Column="0" Text="From name" Margin="0,0,12,8" VerticalAlignment="Center" />
                         <TextBox   Grid.Row="4" Grid.Column="1" x:Name="FromNameBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="4" Grid.Column="2" Style="{StaticResource Help}">
+                            <TextBlock.ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap"
+                                Text="The sender name employees will see in their inbox, e.g. 'Dawloom HR'. Optional." /></TextBlock.ToolTip>
+                        </TextBlock>
+
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="Username" Margin="0,0,12,8" VerticalAlignment="Center" />
-                        <TextBox   Grid.Row="5" Grid.Column="1" x:Name="SmtpUserBox" Margin="0,0,0,8"
-                                   ToolTip="Usually the full email address." />
+                        <TextBox   Grid.Row="5" Grid.Column="1" x:Name="SmtpUserBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="5" Grid.Column="2" Style="{StaticResource Help}">
+                            <TextBlock.ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap"
+                                Text="The login for the mail server — almost always your full email address (the same as the From address)." /></TextBlock.ToolTip>
+                        </TextBlock>
+
                         <TextBlock Grid.Row="6" Grid.Column="0" Text="Password" Margin="0,0,12,8" VerticalAlignment="Center" />
-                        <PasswordBox Grid.Row="6" Grid.Column="1" x:Name="SmtpPassBox" Margin="0,0,0,8"
-                                     ToolTip="For Gmail, use a Google App Password." />
+                        <PasswordBox Grid.Row="6" Grid.Column="1" x:Name="SmtpPassBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="6" Grid.Column="2" Style="{StaticResource Help}">
+                            <TextBlock.ToolTip><TextBlock MaxWidth="340" TextWrapping="Wrap"
+                                Text="For Gmail you must use an APP PASSWORD, not your normal password: Google Account → Security → turn on 2-Step Verification → App passwords → create one for 'Mail', then paste the 16-character code here. Other providers: use your mailbox password." /></TextBlock.ToolTip>
+                        </TextBlock>
+
                         <CheckBox  Grid.Row="7" Grid.Column="1" x:Name="AutoSendBox" Margin="0,0,0,8"
                                    Content="Automatically email weekly/monthly reports" />
-
-                        <TextBlock Grid.Row="8" Grid.Column="0" Text="Weekly subject" Margin="0,0,12,8" VerticalAlignment="Center" />
-                        <TextBox   Grid.Row="8" Grid.Column="1" x:Name="SubjWeeklyBox" Margin="0,0,0,8"
-                                   ToolTip="Use {Name} and {Period} placeholders." />
-                        <TextBlock Grid.Row="9" Grid.Column="0" Text="Monthly subject" Margin="0,0,12,8" VerticalAlignment="Center" />
-                        <TextBox   Grid.Row="9" Grid.Column="1" x:Name="SubjMonthlyBox" Margin="0,0,0,8" />
-                        <TextBlock Grid.Row="10" Grid.Column="0" Text="Manual subject" Margin="0,0,12,8" VerticalAlignment="Center" />
-                        <TextBox   Grid.Row="10" Grid.Column="1" x:Name="SubjManualBox" Margin="0,0,0,8" />
-                        <TextBlock Grid.Row="11" Grid.Column="0" Text="Slip subject" Margin="0,0,12,8" VerticalAlignment="Center" />
-                        <TextBox   Grid.Row="11" Grid.Column="1" x:Name="SubjSlipBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="7" Grid.Column="2" Style="{StaticResource Help}">
+                            <TextBlock.ToolTip><TextBlock MaxWidth="340" TextWrapping="Wrap"
+                                Text="When ticked, on each launch the app emails any not-yet-sent previous week (Sat–Fri) and previous month report to every employee with an email. Leave off until you've sent a test." /></TextBlock.ToolTip>
+                        </TextBlock>
                     </Grid>
                 </GroupBox>
 

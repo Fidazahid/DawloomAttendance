@@ -40,11 +40,11 @@ namespace DawloomAttendance.Views
             SmtpUserBox.Text    = email.Username;
             SmtpPassBox.Password = email.Password;
             AutoSendBox.IsChecked = email.EnableAutoSend;
-            SubjWeeklyBox.Text  = email.SubjectWeekly;
-            SubjMonthlyBox.Text = email.SubjectMonthly;
-            SubjManualBox.Text  = email.SubjectManual;
-            SubjSlipBox.Text    = email.SubjectSlip;
+            // Subject lines are fixed defaults (not user-configured); _email carries them through.
+            _currentEmail = email;
         }
+
+        private EmailSettings _currentEmail;
 
         private void Ok_Click(object sender, RoutedEventArgs e)
         {
@@ -87,10 +87,11 @@ namespace DawloomAttendance.Views
             Username = (SmtpUserBox.Text ?? "").Trim(),
             Password = SmtpPassBox.Password,
             EnableAutoSend = AutoSendBox.IsChecked == true,
-            SubjectWeekly = SubjWeeklyBox.Text,
-            SubjectMonthly = SubjMonthlyBox.Text,
-            SubjectManual = SubjManualBox.Text,
-            SubjectSlip = SubjSlipBox.Text
+            // Keep the fixed subject templates (we set these, not the user).
+            SubjectWeekly = _currentEmail?.SubjectWeekly ?? new EmailSettings().SubjectWeekly,
+            SubjectMonthly = _currentEmail?.SubjectMonthly ?? new EmailSettings().SubjectMonthly,
+            SubjectManual = _currentEmail?.SubjectManual ?? new EmailSettings().SubjectManual,
+            SubjectSlip = _currentEmail?.SubjectSlip ?? new EmailSettings().SubjectSlip
         };
 
         private void TestEmail_Click(object sender, RoutedEventArgs e)
