@@ -39,7 +39,11 @@ real connect, live punch capture, backfill of 1004+ records, attendance calc, re
   is deferred until later (see Open Decision); SDK rules are runtime-agnostic.
 
 ### ⬜ Pending
-- **Phase 5:** email notifications (late alerts, end-of-day summary, SMTP); WhatsApp add-on.
+- **Phase 5:** WhatsApp add-on.
+  - ✅ **Email reports (SMTP)**: per-employee attendance report PDF (summary + daily) emailed
+    from the Reports view (selection + date range; reports missing emails), salary-slip emailing,
+    and automatic on-launch send of the previous Sat–Fri week + previous month (idempotent via a
+    sent-log; configurable SMTP + subjects in Settings, with a "Send test email" button).
   - ✅ **Leave balances/types** (annual/sick/casual/unpaid): typed leave with per-employee yearly
     entitlements + balances (entitled/taken/remaining), a **Leaves** sidebar view, and integration
     with the calc engine (typed off-reason) + payroll (paid leave is payable, unpaid is deducted).
