@@ -129,6 +129,12 @@ namespace DawloomAttendance
             ShowPage(new Views.BackupView(_db));
         }
 
+        private void NavAudit_Click(object sender, RoutedEventArgs e)
+        {
+            if (_db == null) { Log("[FAIL] Database unavailable."); return; }
+            ShowPage(new Views.AuditWindow(_db));
+        }
+
         private void ShowHome()
         {
             PageHost.Content = null;

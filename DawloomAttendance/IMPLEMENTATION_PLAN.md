@@ -44,7 +44,11 @@ real connect, live punch capture, backfill of 1004+ records, attendance calc, re
     with the calc engine (typed off-reason) + payroll (paid leave is payable, unpaid is deducted).
     Covered by `DawloomAttendance.Tests` (MSTest, x86) — 12 tests across payroll math, the leave
     data layer, and the attendance service. Run via `run-tests.ps1`.
-- **Phase 6:** role-based access (Admin/HR/Manager); audit log of changes.
+- **Phase 6:** role-based access (Admin/HR/Manager).
+  - ✅ **Audit log of changes**: `AuditLog` table + trail recording who/when/what for punch
+    delete/edit, employee add/update/delete, and leave add/remove/entitlement changes; an
+    **Audit** sidebar viewer (date + user filter). Actor defaults to the Windows user and
+    will switch to the app user once RBAC/login lands. Covered by 5 tests in `DawloomAttendance.Tests`.
 - **Phase 7:** single-file installer (Inno Setup/Velopack); User Manual + Admin Guide PDFs; training; handover.
 - **Optional:** Excel bulk employee import; .NET 8 + MVVM migration.
 

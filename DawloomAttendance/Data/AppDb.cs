@@ -160,7 +160,19 @@ CREATE TABLE IF NOT EXISTS LeaveEntry (
     Reason       TEXT,
     CreatedAt    TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS IX_LeaveEntry_EnrollDate ON LeaveEntry(EnrollNumber, Date);";
+CREATE INDEX IF NOT EXISTS IX_LeaveEntry_EnrollDate ON LeaveEntry(EnrollNumber, Date);
+
+-- Audit trail of user-initiated data changes: who did what, when.
+CREATE TABLE IF NOT EXISTS AuditLog (
+    Id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    Timestamp TEXT NOT NULL,
+    Actor     TEXT NOT NULL,
+    Action    TEXT NOT NULL,
+    Entity    TEXT,
+    EntityId  TEXT,
+    Detail    TEXT
+);
+CREATE INDEX IF NOT EXISTS IX_AuditLog_Timestamp ON AuditLog(Timestamp);";
                 cmd.ExecuteNonQuery();
 
                 MigrateWeeklyOff(conn);
@@ -344,33 +356,49 @@ VALUES ($enroll, $name, $cnic, $dept, $desig, $contact, $shift, $active, $create
                 BindEmployee(cmd, e);
                 cmd.Parameters.AddWithValue("$created", (e.CreatedAt == default ? DateTime.Now : e.CreatedAt).ToString(TimeFormat));
                 cmd.ExecuteNonQuery();
-                return conn.LastInsertRowId;
+                long newId = conn.LastInsertRowId;
+                Audit(conn, "Employee added", "Employee", newId.ToString(), $"{e.EnrollNumber} {e.Name}".Trim());
+                return newId;
             }
         }
 
         public void UpdateEmployee(Employee e)
         {
             using (var conn = Open())
-            using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = @"
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = @"
 UPDATE Employee SET EnrollNumber=$enroll, Name=$name, Cnic=$cnic, Department=$dept,
     Designation=$desig, Contact=$contact, ShiftId=$shift, Active=$active, Salary=$salary
 WHERE Id=$id;";
-                BindEmployee(cmd, e);
-                cmd.Parameters.AddWithValue("$id", e.Id);
-                cmd.ExecuteNonQuery();
+                    BindEmployee(cmd, e);
+                    cmd.Parameters.AddWithValue("$id", e.Id);
+                    cmd.ExecuteNonQuery();
+                }
+                Audit(conn, "Employee updated", "Employee", e.Id.ToString(), $"{e.EnrollNumber} {e.Name}".Trim());
             }
         }
 
         public void DeleteEmployee(long id)
         {
             using (var conn = Open())
-            using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "DELETE FROM Employee WHERE Id=$id;";
-                cmd.Parameters.AddWithValue("$id", id);
-                cmd.ExecuteNonQuery();
+                string label = null;
+                using (var read = conn.CreateCommand())
+                {
+                    read.CommandText = "SELECT EnrollNumber, Name FROM Employee WHERE Id=$id;";
+                    read.Parameters.AddWithValue("$id", id);
+                    using (var r = read.ExecuteReader())
+                        if (r.Read()) label = $"{r.GetValue(0)} {(r.IsDBNull(1) ? "" : r.GetString(1))}".Trim();
+                }
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "DELETE FROM Employee WHERE Id=$id;";
+                    cmd.Parameters.AddWithValue("$id", id);
+                    cmd.ExecuteNonQuery();
+                }
+                Audit(conn, "Employee deleted", "Employee", id.ToString(), label);
             }
         }
 
@@ -598,17 +626,21 @@ UPDATE LeaveType SET Code=$code, Name=$name, Paid=$paid, DefaultDays=$days, Acti
         public void SetEntitlement(string enrollNumber, long leaveTypeId, int year, double days)
         {
             using (var conn = Open())
-            using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = @"
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = @"
 INSERT INTO LeaveEntitlement (EnrollNumber, LeaveTypeId, Year, Days)
 VALUES ($e, $t, $y, $d)
 ON CONFLICT(EnrollNumber, LeaveTypeId, Year) DO UPDATE SET Days = $d;";
-                cmd.Parameters.AddWithValue("$e", enrollNumber ?? string.Empty);
-                cmd.Parameters.AddWithValue("$t", leaveTypeId);
-                cmd.Parameters.AddWithValue("$y", year);
-                cmd.Parameters.AddWithValue("$d", days);
-                cmd.ExecuteNonQuery();
+                    cmd.Parameters.AddWithValue("$e", enrollNumber ?? string.Empty);
+                    cmd.Parameters.AddWithValue("$t", leaveTypeId);
+                    cmd.Parameters.AddWithValue("$y", year);
+                    cmd.Parameters.AddWithValue("$d", days);
+                    cmd.ExecuteNonQuery();
+                }
+                Audit(conn, "Leave entitlement set", "LeaveEntitlement", null,
+                    $"enroll {enrollNumber} type {leaveTypeId} {year} = {days:0.##}");
             }
         }
 
@@ -681,30 +713,40 @@ FROM LeaveEntry WHERE EnrollNumber = $e AND substr(Date, 1, 4) = $yr ORDER BY Da
         public bool InsertLeaveEntry(LeaveEntry e)
         {
             using (var conn = Open())
-            using (var cmd = conn.CreateCommand())
             {
-                // One leave day per (employee, date): a second add for the same day is a no-op.
-                cmd.CommandText = @"
+                bool inserted;
+                using (var cmd = conn.CreateCommand())
+                {
+                    // One leave day per (employee, date): a second add for the same day is a no-op.
+                    cmd.CommandText = @"
 INSERT INTO LeaveEntry (EnrollNumber, LeaveTypeId, Date, Reason, CreatedAt)
 SELECT $e, $t, $d, $reason, $at
 WHERE NOT EXISTS (SELECT 1 FROM LeaveEntry WHERE EnrollNumber = $e AND Date = $d);";
-                cmd.Parameters.AddWithValue("$e", e.EnrollNumber ?? string.Empty);
-                cmd.Parameters.AddWithValue("$t", e.LeaveTypeId);
-                cmd.Parameters.AddWithValue("$d", e.Date.ToString(DateFormat));
-                cmd.Parameters.AddWithValue("$reason", (object)e.Reason ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("$at", DateTime.Now.ToString(TimeFormat));
-                return cmd.ExecuteNonQuery() > 0;
+                    cmd.Parameters.AddWithValue("$e", e.EnrollNumber ?? string.Empty);
+                    cmd.Parameters.AddWithValue("$t", e.LeaveTypeId);
+                    cmd.Parameters.AddWithValue("$d", e.Date.ToString(DateFormat));
+                    cmd.Parameters.AddWithValue("$reason", (object)e.Reason ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$at", DateTime.Now.ToString(TimeFormat));
+                    inserted = cmd.ExecuteNonQuery() > 0;
+                }
+                if (inserted)
+                    Audit(conn, "Leave added", "LeaveEntry", null,
+                        $"enroll {e.EnrollNumber} {e.Date.ToString(DateFormat)} type {e.LeaveTypeId}");
+                return inserted;
             }
         }
 
         public void DeleteLeaveEntry(long id)
         {
             using (var conn = Open())
-            using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "DELETE FROM LeaveEntry WHERE Id=$id;";
-                cmd.Parameters.AddWithValue("$id", id);
-                cmd.ExecuteNonQuery();
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "DELETE FROM LeaveEntry WHERE Id=$id;";
+                    cmd.Parameters.AddWithValue("$id", id);
+                    cmd.ExecuteNonQuery();
+                }
+                Audit(conn, "Leave removed", "LeaveEntry", id.ToString(), null);
             }
         }
 
@@ -786,25 +828,108 @@ FROM RawPunch WHERE EnrollNumber = $e AND substr(Timestamp, 1, 10) = $d ORDER BY
         }
 
         /// <summary>Deletes a single raw punch (e.g. an accidental duplicate scan).</summary>
+        // ---- Audit trail -------------------------------------------------------------
+
+        /// <summary>
+        /// The user attributed to audited changes. Defaults to the Windows account; set
+        /// this on login once role-based access exists so the trail names the app user.
+        /// </summary>
+        public static string CurrentActor { get; set; } = Environment.UserName;
+
+        /// <summary>Records an audit entry on an existing connection (so it shares the caller's work).</summary>
+        private void Audit(SQLiteConnection conn, string action, string entity, string entityId, string detail)
+        {
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+INSERT INTO AuditLog (Timestamp, Actor, Action, Entity, EntityId, Detail)
+VALUES ($ts, $actor, $action, $entity, $id, $detail);";
+                cmd.Parameters.AddWithValue("$ts", DateTime.Now.ToString(TimeFormat));
+                cmd.Parameters.AddWithValue("$actor", CurrentActor ?? string.Empty);
+                cmd.Parameters.AddWithValue("$action", action ?? string.Empty);
+                cmd.Parameters.AddWithValue("$entity", (object)entity ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("$id", (object)entityId ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("$detail", (object)detail ?? DBNull.Value);
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        /// <summary>Records an audit entry on its own connection (for UI-level events like login).</summary>
+        public void RecordAudit(string action, string entity = null, string entityId = null, string detail = null)
+        {
+            using (var conn = Open())
+                Audit(conn, action, entity, entityId, detail);
+        }
+
+        /// <summary>Audit entries within [from, to] (inclusive dates), newest first, optionally one actor.</summary>
+        public IReadOnlyList<AuditEntry> GetAuditLog(DateTime from, DateTime to, string actor = null)
+        {
+            var list = new List<AuditEntry>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = @"
+SELECT Id, Timestamp, Actor, Action, Entity, EntityId, Detail FROM AuditLog
+WHERE Timestamp >= $from AND Timestamp < $to
+  AND ($actor IS NULL OR Actor = $actor)
+ORDER BY Timestamp DESC, Id DESC;";
+                cmd.Parameters.AddWithValue("$from", from.Date.ToString(TimeFormat));
+                cmd.Parameters.AddWithValue("$to", to.Date.AddDays(1).ToString(TimeFormat));
+                cmd.Parameters.AddWithValue("$actor", string.IsNullOrEmpty(actor) ? (object)DBNull.Value : actor);
+                using (var r = cmd.ExecuteReader())
+                    while (r.Read())
+                        list.Add(new AuditEntry
+                        {
+                            Id = r.GetInt64(0),
+                            Timestamp = ParseTime(r.GetString(1)),
+                            Actor = r.GetString(2),
+                            Action = r.GetString(3),
+                            Entity = r.IsDBNull(4) ? null : r.GetString(4),
+                            EntityId = r.IsDBNull(5) ? null : r.GetString(5),
+                            Detail = r.IsDBNull(6) ? null : r.GetString(6)
+                        });
+            }
+            return list;
+        }
+
+        /// <summary>Distinct actors that appear in the audit log (for the viewer's filter).</summary>
+        public IReadOnlyList<string> GetAuditActors()
+        {
+            var list = new List<string>();
+            using (var conn = Open())
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.CommandText = "SELECT DISTINCT Actor FROM AuditLog ORDER BY Actor;";
+                using (var r = cmd.ExecuteReader())
+                    while (r.Read())
+                        if (!r.IsDBNull(0)) list.Add(r.GetString(0));
+            }
+            return list;
+        }
+
         public void DeletePunch(long id)
         {
             using (var conn = Open())
             {
                 // Tombstone the device-original (enroll, timestamp) first so the next
                 // on-connect backfill doesn't silently re-import the punch we're deleting.
+                string enroll = null, ts = null;
                 using (var read = conn.CreateCommand())
                 {
                     read.CommandText = "SELECT EnrollNumber, Timestamp FROM RawPunch WHERE Id=$id;";
                     read.Parameters.AddWithValue("$id", id);
                     using (var r = read.ExecuteReader())
-                        if (r.Read()) SuppressDevicePunch(conn, r.GetString(0), r.GetString(1), "deleted");
+                        if (r.Read()) { enroll = r.GetString(0); ts = r.GetString(1); }
                 }
+                if (ts != null) SuppressDevicePunch(conn, enroll, ts, "deleted");
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.CommandText = "DELETE FROM RawPunch WHERE Id=$id;";
                     cmd.Parameters.AddWithValue("$id", id);
                     cmd.ExecuteNonQuery();
                 }
+                Audit(conn, "Punch deleted", "RawPunch", id.ToString(),
+                    ts != null ? $"enroll {enroll} @ {ts}" : null);
             }
         }
 
@@ -851,12 +976,15 @@ VALUES ($enroll, $ts, $reason, $at);";
         public void UpdatePunchState(long id, int attState)
         {
             using (var conn = Open())
-            using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "UPDATE RawPunch SET AttState=$s WHERE Id=$id;";
-                cmd.Parameters.AddWithValue("$s", attState);
-                cmd.Parameters.AddWithValue("$id", id);
-                cmd.ExecuteNonQuery();
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "UPDATE RawPunch SET AttState=$s WHERE Id=$id;";
+                    cmd.Parameters.AddWithValue("$s", attState);
+                    cmd.Parameters.AddWithValue("$id", id);
+                    cmd.ExecuteNonQuery();
+                }
+                Audit(conn, "Punch type changed", "RawPunch", id.ToString(), $"AttState → {attState}");
             }
         }
 
@@ -864,12 +992,15 @@ VALUES ($enroll, $ts, $reason, $at);";
         public void UpdatePunchTime(long id, DateTime timestamp)
         {
             using (var conn = Open())
-            using (var cmd = conn.CreateCommand())
             {
-                cmd.CommandText = "UPDATE RawPunch SET Timestamp=$ts WHERE Id=$id;";
-                cmd.Parameters.AddWithValue("$ts", timestamp.ToString(TimeFormat));
-                cmd.Parameters.AddWithValue("$id", id);
-                cmd.ExecuteNonQuery();
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "UPDATE RawPunch SET Timestamp=$ts WHERE Id=$id;";
+                    cmd.Parameters.AddWithValue("$ts", timestamp.ToString(TimeFormat));
+                    cmd.Parameters.AddWithValue("$id", id);
+                    cmd.ExecuteNonQuery();
+                }
+                Audit(conn, "Punch time edited", "RawPunch", id.ToString(), $"→ {timestamp.ToString(TimeFormat)}");
             }
         }
 
