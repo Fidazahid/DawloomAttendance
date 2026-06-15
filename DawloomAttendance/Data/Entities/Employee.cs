@@ -19,6 +19,9 @@ namespace DawloomAttendance.Data.Entities
         public string Designation { get; set; }
         public string Contact { get; set; }
 
+        /// <summary>Email address used to send this employee their attendance reports / slip.</summary>
+        public string Email { get; set; }
+
         /// <summary>Monthly gross salary, used by the payroll report to compute pay.</summary>
         public double Salary { get; set; }
 

@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS Employee (
     Department    TEXT,
     Designation   TEXT,
     Contact       TEXT,
+    Email         TEXT,
     ShiftId       INTEGER,
     Active        INTEGER NOT NULL DEFAULT 1,
     CreatedAt     TEXT NOT NULL,
@@ -178,6 +179,7 @@ CREATE INDEX IF NOT EXISTS IX_AuditLog_Timestamp ON AuditLog(Timestamp);";
                 MigrateWeeklyOff(conn);
                 MigrateHolidayEmployee(conn);
                 MigrateColumn(conn, "Employee", "Salary", "REAL NOT NULL DEFAULT 0");
+                MigrateColumn(conn, "Employee", "Email", "TEXT");
                 SeedLeaveTypes(conn);
             }
         }
@@ -302,7 +304,7 @@ FROM RawPunch ORDER BY Id DESC LIMIT $limit;";
             using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
-SELECT Id, EnrollNumber, Name, Cnic, Department, Designation, Contact, ShiftId, Active, CreatedAt, Salary
+SELECT Id, EnrollNumber, Name, Cnic, Department, Designation, Contact, ShiftId, Active, CreatedAt, Salary, Email
 FROM Employee ORDER BY CAST(EnrollNumber AS INTEGER), EnrollNumber;";
                 using (var r = cmd.ExecuteReader())
                 {
@@ -320,7 +322,8 @@ FROM Employee ORDER BY CAST(EnrollNumber AS INTEGER), EnrollNumber;";
                             ShiftId = r.IsDBNull(7) ? (long?)null : r.GetInt64(7),
                             Active = r.GetInt32(8) != 0,
                             CreatedAt = ParseTime(r.GetString(9)),
-                            Salary = r.IsDBNull(10) ? 0 : r.GetDouble(10)
+                            Salary = r.IsDBNull(10) ? 0 : r.GetDouble(10),
+                            Email = r.IsDBNull(11) ? null : r.GetString(11)
                         });
                     }
                 }
@@ -351,8 +354,8 @@ WHERE NOT EXISTS (SELECT 1 FROM Employee WHERE EnrollNumber = $enroll);";
             using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
-INSERT INTO Employee (EnrollNumber, Name, Cnic, Department, Designation, Contact, ShiftId, Active, CreatedAt, Salary)
-VALUES ($enroll, $name, $cnic, $dept, $desig, $contact, $shift, $active, $created, $salary);";
+INSERT INTO Employee (EnrollNumber, Name, Cnic, Department, Designation, Contact, Email, ShiftId, Active, CreatedAt, Salary)
+VALUES ($enroll, $name, $cnic, $dept, $desig, $contact, $email, $shift, $active, $created, $salary);";
                 BindEmployee(cmd, e);
                 cmd.Parameters.AddWithValue("$created", (e.CreatedAt == default ? DateTime.Now : e.CreatedAt).ToString(TimeFormat));
                 cmd.ExecuteNonQuery();
@@ -370,7 +373,7 @@ VALUES ($enroll, $name, $cnic, $dept, $desig, $contact, $shift, $active, $create
                 {
                     cmd.CommandText = @"
 UPDATE Employee SET EnrollNumber=$enroll, Name=$name, Cnic=$cnic, Department=$dept,
-    Designation=$desig, Contact=$contact, ShiftId=$shift, Active=$active, Salary=$salary
+    Designation=$desig, Contact=$contact, Email=$email, ShiftId=$shift, Active=$active, Salary=$salary
 WHERE Id=$id;";
                     BindEmployee(cmd, e);
                     cmd.Parameters.AddWithValue("$id", e.Id);
@@ -1238,6 +1241,7 @@ WHERE (Recurring = 0 AND Date = $exact) OR (Recurring = 1 AND substr(Date, 6, 5)
             cmd.Parameters.AddWithValue("$dept", (object)e.Department ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$desig", (object)e.Designation ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$contact", (object)e.Contact ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$email", (object)e.Email ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$shift", (object)e.ShiftId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$active", e.Active ? 1 : 0);
             cmd.Parameters.AddWithValue("$salary", e.Salary);

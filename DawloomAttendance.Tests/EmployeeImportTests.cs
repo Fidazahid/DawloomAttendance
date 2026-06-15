@@ -135,6 +135,18 @@ namespace DawloomAttendance.Tests
         }
 
         [TestMethod]
+        public void Import_ReadsEmailColumn()
+        {
+            var path = MakeXlsx(
+                new[] { "Enroll #", "Name", "Email" },
+                new[] { "1001", "Ali", "ali@example.com" });
+
+            EmployeeImport.FromExcel(path, _db);
+
+            Assert.AreEqual("ali@example.com", Emp("1001").Email);
+        }
+
+        [TestMethod]
         public void ActiveColumn_ParsesNoAsInactive()
         {
             var path = MakeXlsx(Header, new[] { "1001", "Ali", "", "", "", "", "40000", "", "No" });

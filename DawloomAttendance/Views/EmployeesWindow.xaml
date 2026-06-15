@@ -43,6 +43,7 @@
                 <DataGridTextColumn Header="Department" Binding="{Binding Department}" Width="130" />
                 <DataGridTextColumn Header="Designation" Binding="{Binding Designation}" Width="130" />
                 <DataGridTextColumn Header="Contact" Binding="{Binding Contact}" Width="110" />
+                <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="170" />
                 <DataGridTextColumn Header="Salary" Binding="{Binding Salary}" Width="90" />
                 <DataGridComboBoxColumn Header="Shift" x:Name="ShiftColumn" Width="150"
                                         SelectedValueBinding="{Binding ShiftId}"

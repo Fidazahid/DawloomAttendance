@@ -39,6 +39,7 @@ namespace DawloomAttendance.Services
                 ["department"] = "department", ["dept"] = "department",
                 ["designation"] = "designation", ["title"] = "designation",
                 ["contact"] = "contact", ["phone"] = "contact", ["mobile"] = "contact",
+                ["email"] = "email", ["e-mail"] = "email",
                 ["salary"] = "salary",
                 ["shift"] = "shift",
                 ["active"] = "active",
@@ -46,7 +47,7 @@ namespace DawloomAttendance.Services
 
         /// <summary>The columns written by <see cref="WriteTemplate"/> (also the recommended layout).</summary>
         private static readonly string[] TemplateHeaders =
-            { "Enroll #", "Name", "CNIC", "Department", "Designation", "Contact", "Salary", "Shift", "Active" };
+            { "Enroll #", "Name", "CNIC", "Department", "Designation", "Contact", "Email", "Salary", "Shift", "Active" };
 
         public static ImportResult FromExcel(string path, AppDb db)
         {
@@ -103,6 +104,7 @@ namespace DawloomAttendance.Services
                     if (vals.TryGetValue("department", out v)) emp.Department = NullIfEmpty(v);
                     if (vals.TryGetValue("designation", out v)) emp.Designation = NullIfEmpty(v);
                     if (vals.TryGetValue("contact", out v)) emp.Contact = NullIfEmpty(v);
+                    if (vals.TryGetValue("email", out v)) emp.Email = NullIfEmpty(v);
 
                     if (vals.TryGetValue("salary", out var salStr) && !string.IsNullOrWhiteSpace(salStr))
                     {
@@ -136,7 +138,7 @@ namespace DawloomAttendance.Services
         {
             var example = new List<IList<string>>
             {
-                new[] { "1001", "Ali Khan", "35202-1234567-1", "Production", "Operator", "0300-1234567", "50000", "Day", "Yes" }
+                new[] { "1001", "Ali Khan", "35202-1234567-1", "Production", "Operator", "0300-1234567", "ali@example.com", "50000", "Day", "Yes" }
             };
             ExcelExport.Write(path, "Employees", TemplateHeaders, example);
         }
