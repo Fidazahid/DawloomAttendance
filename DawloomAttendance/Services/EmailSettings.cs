@@ -26,7 +26,7 @@ namespace DawloomAttendance.Services
 
         // Sender display name varies by the email's nature (set here, not user-configured).
         public string FromNameReports { get; set; } = "Dawloom Attendance";
-        public string FromNameSalary { get; set; } = "Dawloom Salary";
+        public string FromNameSalary { get; set; } = "Dawloom Payroll";
 
         /// <summary>True when enough is set to attempt a send (host + from address).</summary>
         public bool IsConfigured =>
