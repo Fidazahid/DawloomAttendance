@@ -46,8 +46,10 @@ namespace DawloomAttendance.Services
         /// returning one outcome per recipient. Missing-email recipients are reported, not sent.
         /// </summary>
         public static List<EmailSendOutcome> Send(AppDb db, EmailSettings email, IEnumerable<Employee> recipients,
-            DateTime from, DateTime to, string subjectTemplate, string kind, string periodKey, bool skipAlreadySent)
+            DateTime from, DateTime to, string subjectTemplate, string kind, string periodKey, bool skipAlreadySent,
+            string fromName = null)
         {
+            fromName = string.IsNullOrWhiteSpace(fromName) ? email.FromNameReports : fromName;
             var outcomes = new List<EmailSendOutcome>();
             var plan = Plan(db, recipients, kind, periodKey, skipAlreadySent);
 
@@ -74,8 +76,8 @@ namespace DawloomAttendance.Services
                 {
                     EmployeeReport.WritePdf(path, e, from, to, days);
                     var subject = EmailService.FormatSubject(subjectTemplate, e.Name ?? e.EnrollNumber, period);
-                    var body = $"Dear {e.Name ?? "employee"},\r\n\r\nPlease find attached your attendance report for {period}.\r\n\r\nRegards,\r\n{email.FromName}";
-                    EmailService.Send(email, e.Email, subject, body, path);
+                    var body = $"Dear {e.Name ?? "employee"},\r\n\r\nPlease find attached your attendance report for {period}.\r\n\r\nRegards,\r\n{fromName}";
+                    EmailService.Send(email, e.Email, subject, body, path, fromName);
 
                     if (!string.IsNullOrEmpty(periodKey)) db.RecordEmailSent(e.EnrollNumber, kind, periodKey, true, null);
                     outcomes.Add(EmailSendOutcome.Ok(e.EnrollNumber, e.Name, e.Email));

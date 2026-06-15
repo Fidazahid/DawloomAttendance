@@ -13,7 +13,6 @@ namespace DawloomAttendance.Services
         public int Port { get; set; } = 587;
         public bool UseSsl { get; set; } = true;
         public string FromAddress { get; set; } = "";
-        public string FromName { get; set; } = "Dawloom Attendance";
         public string Username { get; set; } = "";
         public string Password { get; set; } = "";
 
@@ -24,6 +23,10 @@ namespace DawloomAttendance.Services
         public string SubjectMonthly { get; set; } = "Monthly Attendance Report — {Name} ({Period})";
         public string SubjectManual { get; set; } = "Attendance Report — {Name} ({Period})";
         public string SubjectSlip { get; set; } = "Salary Slip — {Name} ({Period})";
+
+        // Sender display name varies by the email's nature (set here, not user-configured).
+        public string FromNameReports { get; set; } = "Dawloom Attendance";
+        public string FromNameSalary { get; set; } = "Dawloom Salary";
 
         /// <summary>True when enough is set to attempt a send (host + from address).</summary>
         public bool IsConfigured =>
@@ -39,7 +42,6 @@ namespace DawloomAttendance.Services
             if (int.TryParse(app["Email.Port"], out var port)) s.Port = port;
             if (bool.TryParse(app["Email.UseSsl"], out var ssl)) s.UseSsl = ssl;
             if (!string.IsNullOrWhiteSpace(v = app["Email.FromAddress"])) s.FromAddress = v;
-            if (!string.IsNullOrWhiteSpace(v = app["Email.FromName"])) s.FromName = v;
             if (!string.IsNullOrWhiteSpace(v = app["Email.Username"])) s.Username = v;
             if (!string.IsNullOrWhiteSpace(v = app["Email.Password"])) s.Password = v;
             if (bool.TryParse(app["Email.EnableAutoSend"], out var auto)) s.EnableAutoSend = auto;
@@ -58,7 +60,6 @@ namespace DawloomAttendance.Services
             Set(cfg, "Email.Port", Port.ToString());
             Set(cfg, "Email.UseSsl", UseSsl.ToString());
             Set(cfg, "Email.FromAddress", FromAddress);
-            Set(cfg, "Email.FromName", FromName);
             Set(cfg, "Email.Username", Username);
             Set(cfg, "Email.Password", Password);
             Set(cfg, "Email.EnableAutoSend", EnableAutoSend.ToString());

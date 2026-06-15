@@ -421,7 +421,8 @@ namespace DawloomAttendance.Views
                         {
                             PdfExport.WriteSalarySlips(path, period, new[] { slip });
                             var subject = EmailService.FormatSubject(email.SubjectSlip, slip.Name ?? slip.Enroll, period);
-                            EmailService.Send(email, addr, subject, $"Dear {slip.Name},\r\n\r\nPlease find attached your salary slip for {period}.\r\n\r\nRegards,\r\n{email.FromName}", path);
+                            var body = $"Dear {slip.Name},\r\n\r\nPlease find attached your salary slip for {period}.\r\n\r\nRegards,\r\n{email.FromNameSalary}";
+                            EmailService.Send(email, addr, subject, body, path, email.FromNameSalary);
                             list.Add(EmailSendOutcome.Ok(slip.Enroll, slip.Name, addr));
                         }
                         catch (Exception ex) { list.Add(EmailSendOutcome.Fail(slip.Enroll, slip.Name, addr, ex.Message)); }

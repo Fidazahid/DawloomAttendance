@@ -79,7 +79,7 @@
                             <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="SMTP host" Margin="0,0,12,8" VerticalAlignment="Center" />
@@ -109,30 +109,23 @@
                                 Text="The email address reports are sent FROM — normally your own company/Gmail address (e.g. hr@yourcompany.com)." /></TextBlock.ToolTip>
                         </TextBlock>
 
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="From name" Margin="0,0,12,8" VerticalAlignment="Center" />
-                        <TextBox   Grid.Row="4" Grid.Column="1" x:Name="FromNameBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Username" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <TextBox   Grid.Row="4" Grid.Column="1" x:Name="SmtpUserBox" Margin="0,0,0,8" />
                         <TextBlock Grid.Row="4" Grid.Column="2" Style="{StaticResource Help}">
-                            <TextBlock.ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap"
-                                Text="The sender name employees will see in their inbox, e.g. 'Dawloom HR'. Optional." /></TextBlock.ToolTip>
-                        </TextBlock>
-
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Username" Margin="0,0,12,8" VerticalAlignment="Center" />
-                        <TextBox   Grid.Row="5" Grid.Column="1" x:Name="SmtpUserBox" Margin="0,0,0,8" />
-                        <TextBlock Grid.Row="5" Grid.Column="2" Style="{StaticResource Help}">
                             <TextBlock.ToolTip><TextBlock MaxWidth="320" TextWrapping="Wrap"
                                 Text="The login for the mail server — almost always your full email address (the same as the From address)." /></TextBlock.ToolTip>
                         </TextBlock>
 
-                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Password" Margin="0,0,12,8" VerticalAlignment="Center" />
-                        <PasswordBox Grid.Row="6" Grid.Column="1" x:Name="SmtpPassBox" Margin="0,0,0,8" />
-                        <TextBlock Grid.Row="6" Grid.Column="2" Style="{StaticResource Help}">
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Password" Margin="0,0,12,8" VerticalAlignment="Center" />
+                        <PasswordBox Grid.Row="5" Grid.Column="1" x:Name="SmtpPassBox" Margin="0,0,0,8" />
+                        <TextBlock Grid.Row="5" Grid.Column="2" Style="{StaticResource Help}">
                             <TextBlock.ToolTip><TextBlock MaxWidth="340" TextWrapping="Wrap"
                                 Text="For Gmail you must use an APP PASSWORD, not your normal password: Google Account → Security → turn on 2-Step Verification → App passwords → create one for 'Mail', then paste the 16-character code here. Other providers: use your mailbox password." /></TextBlock.ToolTip>
                         </TextBlock>
 
-                        <CheckBox  Grid.Row="7" Grid.Column="1" x:Name="AutoSendBox" Margin="0,0,0,8"
+                        <CheckBox  Grid.Row="6" Grid.Column="1" x:Name="AutoSendBox" Margin="0,0,0,8"
                                    Content="Automatically email weekly/monthly reports" />
-                        <TextBlock Grid.Row="7" Grid.Column="2" Style="{StaticResource Help}">
+                        <TextBlock Grid.Row="6" Grid.Column="2" Style="{StaticResource Help}">
                             <TextBlock.ToolTip><TextBlock MaxWidth="340" TextWrapping="Wrap"
                                 Text="When ticked, on each launch the app emails any not-yet-sent previous week (Sat–Fri) and previous month report to every employee with an email. Leave off until you've sent a test." /></TextBlock.ToolTip>
                         </TextBlock>

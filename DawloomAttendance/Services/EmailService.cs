@@ -12,7 +12,7 @@ namespace DawloomAttendance.Services
         /// Sends one email with an optional attachment. Throws on failure (bad credentials,
         /// unreachable server, …) so the caller can record the error against the recipient.
         /// </summary>
-        public static void Send(EmailSettings s, string toEmail, string subject, string body, string attachmentPath = null)
+        public static void Send(EmailSettings s, string toEmail, string subject, string body, string attachmentPath = null, string fromName = null)
         {
             if (s == null) throw new ArgumentNullException(nameof(s));
             if (!s.IsConfigured) throw new InvalidOperationException("Email is not configured (set the SMTP server and From address in Settings).");
@@ -20,7 +20,7 @@ namespace DawloomAttendance.Services
 
             using (var msg = new MailMessage())
             {
-                msg.From = new MailAddress(s.FromAddress, string.IsNullOrWhiteSpace(s.FromName) ? s.FromAddress : s.FromName);
+                msg.From = new MailAddress(s.FromAddress, string.IsNullOrWhiteSpace(fromName) ? s.FromAddress : fromName);
                 msg.To.Add(toEmail.Trim());
                 msg.Subject = subject ?? "";
                 msg.Body = body ?? "";

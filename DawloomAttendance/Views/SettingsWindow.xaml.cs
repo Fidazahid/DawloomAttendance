@@ -36,7 +36,6 @@ namespace DawloomAttendance.Views
             SmtpPortBox.Text    = email.Port.ToString();
             SmtpSslBox.IsChecked = email.UseSsl;
             FromAddressBox.Text = email.FromAddress;
-            FromNameBox.Text    = email.FromName;
             SmtpUserBox.Text    = email.Username;
             SmtpPassBox.Password = email.Password;
             AutoSendBox.IsChecked = email.EnableAutoSend;
@@ -83,7 +82,6 @@ namespace DawloomAttendance.Views
             Port = smtpPort,
             UseSsl = SmtpSslBox.IsChecked == true,
             FromAddress = (FromAddressBox.Text ?? "").Trim(),
-            FromName = (FromNameBox.Text ?? "").Trim(),
             Username = (SmtpUserBox.Text ?? "").Trim(),
             Password = SmtpPassBox.Password,
             EnableAutoSend = AutoSendBox.IsChecked == true,
@@ -104,7 +102,7 @@ namespace DawloomAttendance.Views
             try
             {
                 EmailService.Send(s, s.FromAddress, "Dawloom Attendance — test email",
-                    "This is a test email confirming your SMTP settings work.");
+                    "This is a test email confirming your SMTP settings work.", null, s.FromNameReports);
                 MessageBox.Show(this, "Test email sent to " + s.FromAddress + ".", "Email test",
                     MessageBoxButton.OK, MessageBoxImage.Information);
             }
