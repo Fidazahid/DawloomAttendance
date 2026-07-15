@@ -1,7 +1,7 @@
 <Window x:Class="DawloomAttendance.Views.ShiftsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Shift Templates" Height="420" Width="760"
+        Title="Shift Templates" Height="420" Width="900"
         WindowStartupLocation="CenterOwner">
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -24,14 +24,28 @@
                 <DataGridTextColumn Header="Start (HH:mm)" Binding="{Binding StartTime}" Width="100" />
                 <DataGridTextColumn Header="End (HH:mm)" Binding="{Binding EndTime}" Width="100" />
                 <DataGridTextColumn Header="Grace (min)" Binding="{Binding GraceMinutes}" Width="90" />
-                <DataGridTextColumn Header="Weekend days" Binding="{Binding WeekendDays}" Width="120" />
+                <DataGridTemplateColumn Header="Weekend (days off)" Width="Auto">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="4,0">
+                                <CheckBox Content="Sun" Margin="3,0" VerticalAlignment="Center" IsChecked="{Binding WeekendSun, UpdateSourceTrigger=PropertyChanged}" />
+                                <CheckBox Content="Mon" Margin="3,0" VerticalAlignment="Center" IsChecked="{Binding WeekendMon, UpdateSourceTrigger=PropertyChanged}" />
+                                <CheckBox Content="Tue" Margin="3,0" VerticalAlignment="Center" IsChecked="{Binding WeekendTue, UpdateSourceTrigger=PropertyChanged}" />
+                                <CheckBox Content="Wed" Margin="3,0" VerticalAlignment="Center" IsChecked="{Binding WeekendWed, UpdateSourceTrigger=PropertyChanged}" />
+                                <CheckBox Content="Thu" Margin="3,0" VerticalAlignment="Center" IsChecked="{Binding WeekendThu, UpdateSourceTrigger=PropertyChanged}" />
+                                <CheckBox Content="Fri" Margin="3,0" VerticalAlignment="Center" IsChecked="{Binding WeekendFri, UpdateSourceTrigger=PropertyChanged}" />
+                                <CheckBox Content="Sat" Margin="3,0" VerticalAlignment="Center" IsChecked="{Binding WeekendSat, UpdateSourceTrigger=PropertyChanged}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridCheckBoxColumn Header="Active" Binding="{Binding Active}" Width="55" />
             </DataGrid.Columns>
         </DataGrid>
 
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,10,0,0">
             <TextBlock VerticalAlignment="Center" Foreground="Gray"
-                       Text="Weekend days: 0=Sun, 1=Mon … 6=Sat (comma-separated, e.g. 0 or 5,0)" />
+                       Text="Tick the weekly day(s) off for this shift (e.g. Sun, or Fri + Sun)." />
             <Button Content="Close" Width="90" Height="28" HorizontalAlignment="Right" Margin="20,0,0,0" IsCancel="True" />
         </StackPanel>
     </Grid>
