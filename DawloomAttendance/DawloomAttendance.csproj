@@ -49,6 +49,17 @@
   <PropertyGroup Condition=" '$(ZkSdk)' == 'true' ">
     <DefineConstants>$(DefineConstants);ZK_TYPED</DefineConstants>
   </PropertyGroup>
+  <!-- Native SQLite engine deployment. The Stub.System.Data.SQLite.Core.NetFramework
+       package copies SQLite.Interop.dll into bin\...\x86 and \x64 via its own
+       CopySQLiteInteropFiles target (hooked into BuildDependsOn). Setting this to
+       true ALSO adds those DLLs as Content items, so they are deployed through the
+       standard CopyToOutputDirectory pipeline (and flow to publish/ClickOnce) — a
+       second, independent copy path so the native engine can't silently go missing.
+       Without the interop DLL, System.Data.SQLite throws "Unable to load DLL
+       'SQLite.Interop.dll'" and the app runs but cannot persist any data. -->
+  <PropertyGroup>
+    <ContentSQLiteInteropFiles>true</ContentSQLiteInteropFiles>
+  </PropertyGroup>
   <!-- Persistence: System.Data.SQLite.Core — the SQLite team's ADO.NET provider,
        purpose-built for .NET Framework. Chosen over Microsoft.Data.Sqlite because
        MDS 6.0's BundleInitializer NREs in ApplicationDataHelper on a non-packaged
@@ -283,4 +294,15 @@
     <None Include="lib\zkteco\README.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- Fail-fast guard: verify the native SQLite engine actually reached the output.
+       If the interop DLL is missing (e.g. a build that skipped NuGet restore, so the
+       package's copy target never imported), the app would still launch but silently
+       refuse to save data — logging only a quiet WARN. Turning that into a build
+       error makes the failure impossible to miss. Checks the x86 subfolder (probed by
+       our x86 process) and the app-dir fallback. Skipped when OutDir isn't set. -->
+  <Target Name="VerifySQLiteInteropPresent" AfterTargets="Build"
+          Condition=" '$(OutDir)' != '' And HasTrailingSlash('$(OutDir)') ">
+    <Error Condition="!Exists('$(OutDir)x86\SQLite.Interop.dll') And !Exists('$(OutDir)SQLite.Interop.dll')"
+           Text="Native SQLite engine 'SQLite.Interop.dll' is missing from the output ($(OutDir)). The app would run but be unable to save any data. This usually means the build skipped NuGet restore — run 'msbuild /t:Restore' (or build in Visual Studio / 'dotnet build') so the Stub.System.Data.SQLite.Core.NetFramework package can deploy the interop DLL, then rebuild." />
+  </Target>
 </Project>
