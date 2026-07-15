@@ -296,6 +296,12 @@
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
   </ItemGroup>
+  <!-- Brand assets embedded into the assembly so the PDF exporter can draw the
+       Dawloom logo with no external file dependency at runtime. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\DawloomLogo.png" />
+    <EmbeddedResource Include="Assets\DawloomIcon.png" />
+  </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
     <None Include="lib\zkteco\Register.bat">
