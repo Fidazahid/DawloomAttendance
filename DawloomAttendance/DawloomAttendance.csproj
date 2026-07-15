@@ -43,7 +43,17 @@
        /p:ZkSdk=true  (or set <ZkSdk>true</ZkSdk> here / in your VS build).
        When true: the COMReference below generates Interop.zkemkeeper.dll and the
        ZK_TYPED constant compiles the OnAttTransactionEx live-capture code path. -->
+  <!-- Auto-enable the strongly-typed SDK build whenever the ZKTeco interop assembly
+       is committed at lib\zkteco\Interop.zkemkeeper.dll. That file is required to
+       compile the ZK_TYPED code path (ReadAllLogs / ReadAllUsers / live capture), so
+       its presence is exactly the condition under which the typed build can succeed.
+       Without it, ZkSdk stays false and the project still builds on machines lacking
+       the SDK (connect/ping work late-bound, but no data is read). An explicit
+       /p:ZkSdk=true or =false on the command line still overrides this default.
+       IMPORTANT: this is why the app reads device logs — with ZkSdk=false the read
+       code is compiled out and the device returns 0 records despite connecting. -->
   <PropertyGroup>
+    <ZkSdk Condition=" '$(ZkSdk)' == '' And Exists('$(MSBuildProjectDirectory)\lib\zkteco\Interop.zkemkeeper.dll') ">true</ZkSdk>
     <ZkSdk Condition=" '$(ZkSdk)' == '' ">false</ZkSdk>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(ZkSdk)' == 'true' ">
