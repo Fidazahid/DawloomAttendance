@@ -101,6 +101,27 @@ namespace DawloomAttendance.Services
                     Pair("Overtime pay" + (s.IncludeOvertime ? "" : " (excluded)"), s.OvertimePay.ToString("0")),
                 });
 
+                // Loan deductions table (Date / Payment / Remarks) — only when there are any.
+                if (s.Loans != null && s.Loans.Count > 0)
+                {
+                    var lh = section.AddParagraph("Loan deductions (Rs.)");
+                    lh.Format.Font.Bold = true; lh.Format.Font.Size = 11; lh.Format.Font.Color = BrandDark;
+                    lh.Format.SpaceBefore = Unit.FromCentimeter(0.3);
+                    lh.Format.SpaceAfter = Unit.FromCentimeter(0.12);
+                    lh.Format.Borders.Bottom = new Border { Width = 0.5, Color = RuleGray };
+
+                    var lheaders = new List<string> { "Date", "Payment", "Remarks" };
+                    var lrows = s.Loans
+                        .Select(x => (IList<string>)new List<string>
+                            { x.Date.ToString("yyyy-MM-dd"), x.Amount.ToString("0"), x.Remarks ?? "" })
+                        .ToList();
+                    RenderTable(section, lheaders, lrows);
+
+                    var tot = section.AddParagraph("Total loan deduction:   Rs. " + s.LoanDeduction.ToString("0"));
+                    tot.Format.Font.Bold = true; tot.Format.Font.Color = BrandDark;
+                    tot.Format.SpaceBefore = Unit.FromCentimeter(0.12);
+                }
+
                 // Highlighted net-pay banner in the brand tint.
                 var net = section.AddParagraph();
                 net.Format.SpaceBefore = Unit.FromCentimeter(0.35);

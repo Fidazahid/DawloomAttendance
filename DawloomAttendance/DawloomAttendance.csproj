@@ -182,6 +182,18 @@
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
+    <Page Include="Views\LoansWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\LoanEditWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\SalaryWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
       <SubType>Code</SubType>
@@ -234,6 +246,18 @@
       <DependentUpon>Views\BackupView.xaml</DependentUpon>
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="Views\LoansWindow.xaml.cs">
+      <DependentUpon>Views\LoansWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Views\LoanEditWindow.xaml.cs">
+      <DependentUpon>Views\LoanEditWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Views\SalaryWindow.xaml.cs">
+      <DependentUpon>Views\SalaryWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Compile>
     <!-- Connection-test step: only the files needed to connect to the device.
          ZkConnectionMonitor, AppDb, BackfillService, logging, settings UI and
          the view models are added back as their Phase 1 steps land. -->
@@ -245,6 +269,9 @@
     <Compile Include="Device\Events\PunchEvent.cs" />
     <Compile Include="Device\Events\DeviceConnectionState.cs" />
     <Compile Include="Data\AppDb.cs" />
+    <Compile Include="Data\AppDb.Salary.cs" />
+    <Compile Include="Data\Entities\Loan.cs" />
+    <Compile Include="Data\Entities\SalaryBatch.cs" />
     <Compile Include="Data\Entities\RawPunch.cs" />
     <Compile Include="Data\Entities\DeviceLog.cs" />
     <Compile Include="Data\Entities\Employee.cs" />
@@ -269,6 +296,7 @@
     <Compile Include="Services\BackupService.cs" />
     <Compile Include="Services\SalarySlip.cs" />
     <Compile Include="Services\PayrollCalculator.cs" />
+    <Compile Include="Services\SalaryService.cs" />
     <Compile Include="Services\DurationFormat.cs" />
     <Compile Include="ViewModels\ObservableObject.cs" />
     <Compile Include="ViewModels\RelayCommand.cs" />

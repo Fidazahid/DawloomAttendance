@@ -100,8 +100,26 @@ namespace DawloomAttendance
                     var monthly = ReportMailer.Send(_db, _email, recipients, mf, mt,
                         _email.SubjectMonthly, "monthly", ReportPeriods.MonthKey(mf), skipAlreadySent: true);
 
+                    // Scheduled salary slips: per-month batches whose send date has arrived
+                    // and haven't been sent. Interns (no salary) are skipped inside SendSlips.
+                    int slipSent = 0;
+                    var due = _db.GetDueScheduledBatches(today);
+                    if (due.Count > 0)
+                    {
+                        var names = _db.GetEmployees().ToDictionary(x => x.EnrollNumber);
+                        foreach (var batch in due)
+                        {
+                            var slips = _db.GetSlipSnapshots(batch.PeriodKey);
+                            var outcomes = SalaryService.SendSlips(_db, _email, batch.MonthYear, slips, names);
+                            _db.MarkBatchSent(batch.PeriodKey, DateTime.Now);
+                            slipSent += outcomes.Count(o => o.Sent);
+                        }
+                    }
+
                     int w = weekly.Count(o => o.Sent), m = monthly.Count(o => o.Sent);
-                    if (w + m > 0) Log($"Auto-email: sent {w} weekly + {m} monthly report(s).");
+                    if (w + m + slipSent > 0)
+                        Log($"Auto-email: sent {w} weekly + {m} monthly report(s)" +
+                            (slipSent > 0 ? $" + {slipSent} salary slip(s)" : "") + ".");
                 }
                 catch (Exception ex) { Log("[WARN] Auto-email failed: " + ex.Message); }
                 finally { _autoSendRunning = false; }
@@ -171,10 +189,22 @@ namespace DawloomAttendance
             ShowPage(new Views.AttendanceWindow(_db));
         }
 
+        private void NavLoans_Click(object sender, RoutedEventArgs e)
+        {
+            if (_db == null) { Log("[FAIL] Database unavailable."); return; }
+            ShowPage(new Views.LoansWindow(_db));
+        }
+
         private void NavReports_Click(object sender, RoutedEventArgs e)
         {
             if (_db == null) { Log("[FAIL] Database unavailable."); return; }
             ShowPage(new Views.ReportsView(_db));
+        }
+
+        private void NavSalary_Click(object sender, RoutedEventArgs e)
+        {
+            if (_db == null) { Log("[FAIL] Database unavailable."); return; }
+            ShowPage(new Views.SalaryWindow(_db));
         }
 
         private void NavBackup_Click(object sender, RoutedEventArgs e)

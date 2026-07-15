@@ -47,21 +47,13 @@
             <TextBlock Text="Report:" VerticalAlignment="Center" Margin="0,0,6,6" />
             <ComboBox x:Name="TypeCombo" Width="170" Margin="0,0,12,6">
                 <ComboBoxItem Content="Monthly summary" IsSelected="True" />
-                <ComboBoxItem Content="Payroll (monthly)" />
                 <ComboBoxItem Content="Daily detail" />
                 <ComboBoxItem Content="Late arrivals" />
                 <ComboBoxItem Content="Absentees" />
             </ComboBox>
-            <TextBlock Text="Lates/deduction:" VerticalAlignment="Center" Margin="0,0,6,6"
-                       ToolTip="Payroll: how many late arrivals equal one day's deduction (e.g. 3)." />
-            <TextBox x:Name="LatesPerDeductionBox" Width="40" Margin="0,0,12,6" Text="3" VerticalAlignment="Center" />
-            <CheckBox x:Name="IncludeOtBox" Content="Include overtime" IsChecked="True" VerticalAlignment="Center" Margin="0,0,12,6"
-                      ToolTip="Payroll: when checked, overtime pay is added to net pay." />
             <Button x:Name="RunButton" Content="Run" Width="80" Height="28" Margin="0,0,8,6" Click="RunButton_Click" />
             <Button x:Name="ExportButton" Content="Export to Excel" Width="120" Height="28" Margin="0,0,8,6" Click="ExportButton_Click" IsEnabled="False" />
             <Button x:Name="ExportPdfButton" Content="Export to PDF" Width="110" Height="28" Margin="0,0,8,6" Click="ExportPdfButton_Click" IsEnabled="False" />
-            <Button x:Name="SalarySlipButton" Content="Salary Slips (PDF)" Width="130" Height="28" Margin="0,0,8,6" Click="SalarySlipButton_Click"
-                    ToolTip="One printable slip per employee for the selected period/filter." />
             <Button x:Name="EmailReportsButton" Content="Send via Email" Width="120" Height="28" Margin="0,0,0,6" Click="EmailReportsButton_Click"
                     ToolTip="Email each selected employee their attendance report (summary + daily) for the date range. No selection = all employees." />
         </WrapPanel>

@@ -30,9 +30,6 @@ namespace DawloomAttendance.Views
             EmployeeList.ItemsSource = _db.GetEmployees()
                 .Select(e => new EmpPick { Enroll = e.EnrollNumber, Display = $"{e.EnrollNumber} - {e.Name}" })
                 .ToList();
-
-            var lpd = _db.GetSetting("LatesPerDeduction");
-            if (!string.IsNullOrWhiteSpace(lpd)) LatesPerDeductionBox.Text = lpd;
         }
 
         private class EmpPick
@@ -109,23 +106,12 @@ namespace DawloomAttendance.Views
             return true;
         }
 
-        private int LatesPerDeduction()
-        {
-            if (!int.TryParse(LatesPerDeductionBox.Text, out var n) || n < 1) n = 3;
-            _db.SetSetting("LatesPerDeduction", n.ToString());
-            return n;
-        }
-
         private void RunButton_Click(object sender, RoutedEventArgs e)
         {
             if (!GatherData(out var from, out var to, out var names, out var shiftByEnroll, out var data)) return;
-            int latesPerDed = LatesPerDeduction();
 
             switch (SelectedType)
             {
-                case "Payroll (monthly)":
-                    _current = PayrollTable(PayrollCalculator.Compute(data, names, shiftByEnroll, latesPerDed, IncludeOtBox.IsChecked == true));
-                    _reportName = "Payroll"; break;
                 case "Daily detail": _current = DailyDetail(data, names, shiftByEnroll); _reportName = "Daily detail"; break;
                 case "Late arrivals": _current = LateList(data, names); _reportName = "Late arrivals"; break;
                 case "Absentees": _current = AbsentList(data, names); _reportName = "Absentees"; break;
@@ -146,35 +132,6 @@ namespace DawloomAttendance.Views
             => names.TryGetValue(enroll, out var emp) ? emp.Cnic : "";
         private static string Desig(IDictionary<string, Data.Entities.Employee> names, string enroll)
             => names.TryGetValue(enroll, out var emp) ? emp.Designation : "";
-
-        // Payroll-ready monthly metrics per employee (feed into a payroll system).
-        private static DataTable PayrollTable(System.Collections.Generic.List<SalarySlip> slips)
-        {
-            var t = new DataTable();
-            t.Columns.Add("Enroll"); t.Columns.Add("Name"); t.Columns.Add("CNIC");
-            t.Columns.Add("Department"); t.Columns.Add("Designation"); t.Columns.Add("Shift");
-            t.Columns.Add("Working days"); t.Columns.Add("Present"); t.Columns.Add("Absent");
-            t.Columns.Add("Paid leave"); t.Columns.Add("Unpaid leave"); t.Columns.Add("Late count"); t.Columns.Add("Late time");
-            t.Columns.Add("Worked"); t.Columns.Add("Overtime");
-            t.Columns.Add("Late deduction (days)"); t.Columns.Add("Payable days");
-            t.Columns.Add("Salary"); t.Columns.Add("Overtime pay"); t.Columns.Add("Net pay");
-
-            foreach (var s in slips)
-            {
-                t.Rows.Add(
-                    s.Enroll, s.Name, s.Cnic, s.Department, s.Designation, s.Shift,
-                    s.WorkingDays, s.Present, s.Absent, s.PaidLeaveDays, s.UnpaidLeaveDays, s.LateCount,
-                    DurationFormat.Minutes(s.LateMinutes),
-                    DurationFormat.Hours(s.WorkedHours),
-                    DurationFormat.Hours(s.OvertimeHours),
-                    s.LateDeductionDays.ToString("0.##"),
-                    s.PayableDays.ToString("0.##"),
-                    s.Salary.ToString("0"),
-                    s.OvertimePay.ToString("0"),
-                    s.NetPay.ToString("0"));
-            }
-            return t;
-        }
 
         private static DataTable MonthlySummary(List<DailyAttendance> data, IDictionary<string, Data.Entities.Employee> names,
             IDictionary<string, Data.Entities.Shift> shiftByEnroll)
@@ -314,43 +271,6 @@ namespace DawloomAttendance.Views
             }
         }
 
-        private async void SalarySlipButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (!GatherData(out var from, out var to, out var names, out var shiftByEnroll, out var data)) return;
-            var slips = PayrollCalculator.Compute(data, names, shiftByEnroll, LatesPerDeduction(), IncludeOtBox.IsChecked == true);
-            if (slips.Count == 0)
-            {
-                MessageBox.Show(Window.GetWindow(this), "No employees to generate slips for.", "Salary Slips", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            var dlg = new Microsoft.Win32.SaveFileDialog
-            {
-                Filter = "PDF (*.pdf)|*.pdf",
-                FileName = $"Dawloom_SalarySlips_{DateTime.Now:yyyyMMdd}.pdf"
-            };
-            if (dlg.ShowDialog() != true) return;
-            try
-            {
-                PdfExport.WriteSalarySlips(dlg.FileName, $"{from:yyyy-MM-dd} to {to:yyyy-MM-dd}", slips);
-                System.Diagnostics.Process.Start(dlg.FileName);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(Window.GetWindow(this), "Slip export failed: " + ex.Message, "Salary Slips", MessageBoxButton.OK, MessageBoxImage.Error);
-                return;
-            }
-
-            // Offer to email each employee their own slip (only meaningful once SMTP is set).
-            var email = EmailSettings.Load();
-            if (email.IsConfigured &&
-                MessageBox.Show(Window.GetWindow(this),
-                    "Also email each employee their individual salary slip?",
-                    "Email Slips", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-            {
-                await EmailSlips(slips, names, from, to, email);
-            }
-        }
-
         // ---- Email sending -----------------------------------------------------------
 
         private List<Data.Entities.Employee> SelectedEmployees()
@@ -398,43 +318,6 @@ namespace DawloomAttendance.Views
             finally
             {
                 EmailReportsButton.IsEnabled = true;
-            }
-        }
-
-        private async System.Threading.Tasks.Task EmailSlips(List<SalarySlip> slips,
-            IDictionary<string, Data.Entities.Employee> names, DateTime from, DateTime to, EmailSettings email)
-        {
-            string period = $"{from:yyyy-MM-dd} to {to:yyyy-MM-dd}";
-            try
-            {
-                var outcomes = await System.Threading.Tasks.Task.Run(() =>
-                {
-                    var list = new List<EmailSendOutcome>();
-                    foreach (var slip in slips)
-                    {
-                        names.TryGetValue(slip.Enroll, out var emp);
-                        string addr = emp?.Email;
-                        if (!EmailService.LooksLikeEmail(addr)) { list.Add(EmailSendOutcome.Fail(slip.Enroll, slip.Name, addr, "no email address")); continue; }
-
-                        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"slip_{slip.Enroll}_{Guid.NewGuid():N}.pdf");
-                        try
-                        {
-                            PdfExport.WriteSalarySlips(path, period, new[] { slip });
-                            var subject = EmailService.FormatSubject(email.SubjectSlip, slip.Name ?? slip.Enroll, period);
-                            var body = $"Dear {slip.Name},\r\n\r\nPlease find attached your salary slip for {period}.\r\n\r\nRegards,\r\n{email.FromNameSalary}";
-                            EmailService.Send(email, addr, subject, body, path, email.FromNameSalary);
-                            list.Add(EmailSendOutcome.Ok(slip.Enroll, slip.Name, addr));
-                        }
-                        catch (Exception ex) { list.Add(EmailSendOutcome.Fail(slip.Enroll, slip.Name, addr, ex.Message)); }
-                        finally { try { System.IO.File.Delete(path); } catch { } }
-                    }
-                    return list;
-                });
-                ShowOutcomeSummary("Email Slips", outcomes);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(Window.GetWindow(this), "Email failed: " + ex.Message, "Email Slips", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

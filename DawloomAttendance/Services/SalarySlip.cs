@@ -29,6 +29,13 @@ namespace DawloomAttendance.Services
         public double BasePay { get; set; }
         public double OvertimePay { get; set; }
         public bool IncludeOvertime { get; set; }
+
+        /// <summary>Total loan deducted on this slip (sum of <see cref="Loans"/>).</summary>
+        public double LoanDeduction { get; set; }
+
+        /// <summary>The individual loan deductions to list on the slip (empty = no loan table).</summary>
+        public System.Collections.Generic.IList<Data.Entities.LoanLine> Loans { get; set; }
+
         public double NetPay { get; set; }
     }
 }

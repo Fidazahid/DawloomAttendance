@@ -14,7 +14,7 @@ namespace DawloomAttendance.Data
     /// the device's COM thread can write a punch while the UI thread reads the feed
     /// without sharing a connection across threads. SQLite serializes the writes.
     /// </summary>
-    public sealed class AppDb
+    public sealed partial class AppDb
     {
         // Stored as TEXT so equality-based dedup is exact and DB files are inspectable.
         private const string TimeFormat = "yyyy-MM-dd HH:mm:ss";
@@ -194,6 +194,7 @@ CREATE INDEX IF NOT EXISTS IX_EmailLog_Lookup ON EmailLog(EnrollNumber, Kind, Pe
                 MigrateColumn(conn, "Employee", "Salary", "REAL NOT NULL DEFAULT 0");
                 MigrateColumn(conn, "Employee", "Email", "TEXT");
                 SeedLeaveTypes(conn);
+                InitializeLoansAndSalary(conn);
             }
         }
 
