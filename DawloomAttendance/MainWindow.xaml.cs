@@ -26,6 +26,8 @@ namespace DawloomAttendance
         private EmailSettings _email;           // SMTP config for emailing reports, edited via the Settings dialog
         private int _machineNumber = 1;         // captured when the monitor starts (avoids UI access off-thread)
         private bool _connectErrorShown;        // so we pop the error dialog once per connect attempt, not every retry
+        private System.Windows.Threading.DispatcherTimer _autoSendTimer;  // re-checks due reports while the app stays open
+        private volatile bool _autoSendRunning;  // guards against overlapping background sends
 
         public MainWindow()
         {
@@ -51,10 +53,25 @@ namespace DawloomAttendance
                 ? "ZKTeco SDK is registered on this PC."
                 : "ZKTeco SDK is NOT registered. TCP Probe still works; install the SDK for a full connect.");
 
-            Closed += (_, __) => { _monitor.Dispose(); _device.Dispose(); };   // stop loop, disconnect, end COM thread
+            Closed += (_, __) => { _autoSendTimer?.Stop(); _monitor.Dispose(); _device.Dispose(); };   // stop loop, disconnect, end COM thread
 
             // Auto-connect once the window is shown (so the error dialog has an owner).
-            Loaded += (_, __) => { StartConnection(); RunAutoEmailIfDue(); };
+            Loaded += (_, __) => { StartConnection(); RunAutoEmailIfDue(); StartAutoSendTimer(); };
+        }
+
+        /// <summary>
+        /// Re-checks for due weekly/monthly reports periodically, so a new week (Monday) or
+        /// month (1st) is caught even when the app is left running for days without a restart.
+        /// The per-period sent-log keeps this idempotent, so ticking hourly never double-sends.
+        /// </summary>
+        private void StartAutoSendTimer()
+        {
+            _autoSendTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromHours(1)
+            };
+            _autoSendTimer.Tick += (_, __) => RunAutoEmailIfDue();
+            _autoSendTimer.Start();
         }
 
         /// <summary>
@@ -65,6 +82,8 @@ namespace DawloomAttendance
         private void RunAutoEmailIfDue()
         {
             if (_db == null || _email == null || !_email.EnableAutoSend || !_email.IsConfigured) return;
+            if (_autoSendRunning) return;   // a previous run (launch or timer tick) is still in flight
+            _autoSendRunning = true;
 
             Task.Run(() =>
             {
@@ -85,6 +104,7 @@ namespace DawloomAttendance
                     if (w + m > 0) Log($"Auto-email: sent {w} weekly + {m} monthly report(s).");
                 }
                 catch (Exception ex) { Log("[WARN] Auto-email failed: " + ex.Message); }
+                finally { _autoSendRunning = false; }
             });
         }
 

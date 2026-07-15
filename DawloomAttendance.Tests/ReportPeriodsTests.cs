@@ -4,47 +4,48 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DawloomAttendance.Tests
 {
-    /// <summary>Saturday–Friday week math and previous-month boundaries.</summary>
+    /// <summary>Monday–Saturday week math and previous-month boundaries.</summary>
     [TestClass]
     public class ReportPeriodsTests
     {
-        // 2026-06-08 is a Monday; the Sat–Fri week containing it starts Sat 2026-06-06.
+        // 2026-06-08 is a Monday; the Mon–Sun week containing a day starts on its Monday.
         [TestMethod]
-        public void WeekStart_IsTheSaturday()
+        public void WeekStart_IsTheMonday()
         {
-            Assert.AreEqual(new DateTime(2026, 6, 6), ReportPeriods.WeekStart(new DateTime(2026, 6, 8)));  // Mon
-            Assert.AreEqual(new DateTime(2026, 6, 6), ReportPeriods.WeekStart(new DateTime(2026, 6, 6)));  // Sat itself
-            Assert.AreEqual(new DateTime(2026, 6, 6), ReportPeriods.WeekStart(new DateTime(2026, 6, 12))); // Fri (end)
-            Assert.AreEqual(new DateTime(2026, 6, 13), ReportPeriods.WeekStart(new DateTime(2026, 6, 13))); // next Sat
+            Assert.AreEqual(new DateTime(2026, 6, 8),  ReportPeriods.WeekStart(new DateTime(2026, 6, 8)));  // Mon itself
+            Assert.AreEqual(new DateTime(2026, 6, 8),  ReportPeriods.WeekStart(new DateTime(2026, 6, 10))); // Wed
+            Assert.AreEqual(new DateTime(2026, 6, 8),  ReportPeriods.WeekStart(new DateTime(2026, 6, 13))); // Sat
+            Assert.AreEqual(new DateTime(2026, 6, 8),  ReportPeriods.WeekStart(new DateTime(2026, 6, 14))); // Sun (still this week)
+            Assert.AreEqual(new DateTime(2026, 6, 15), ReportPeriods.WeekStart(new DateTime(2026, 6, 15))); // next Mon
         }
 
         [TestMethod]
-        public void PreviousWeek_IsThePriorSatToFri()
+        public void PreviousWeek_IsThePriorMonToSat()
         {
-            // On Monday 2026-06-08, the previous completed week is Sat 05-30 .. Fri 06-05.
+            // On Monday 2026-06-08, the previous completed week is Mon 06-01 .. Sat 06-06.
             var (from, to) = ReportPeriods.PreviousWeek(new DateTime(2026, 6, 8));
-            Assert.AreEqual(new DateTime(2026, 5, 30), from);
-            Assert.AreEqual(new DateTime(2026, 6, 5), to);
-            Assert.AreEqual(DayOfWeek.Saturday, from.DayOfWeek);
-            Assert.AreEqual(DayOfWeek.Friday, to.DayOfWeek);
+            Assert.AreEqual(new DateTime(2026, 6, 1), from);
+            Assert.AreEqual(new DateTime(2026, 6, 6), to);
+            Assert.AreEqual(DayOfWeek.Monday, from.DayOfWeek);
+            Assert.AreEqual(DayOfWeek.Saturday, to.DayOfWeek);
         }
 
         [TestMethod]
         public void PreviousWeek_SameForAnyDayWithinCurrentWeek()
         {
-            // Monday and the following Wednesday/Friday are in the same Sat–Fri week,
-            // so "previous week" is identical — a missed Monday is still due on Tue/Wed.
+            // Mon..Sun of one week all share the same "previous week", so a missed Monday
+            // send is still due on Tue/Wed/… of that week.
             var mon = ReportPeriods.PreviousWeek(new DateTime(2026, 6, 8));
             var wed = ReportPeriods.PreviousWeek(new DateTime(2026, 6, 10));
-            var fri = ReportPeriods.PreviousWeek(new DateTime(2026, 6, 12));
+            var sun = ReportPeriods.PreviousWeek(new DateTime(2026, 6, 14));
             Assert.AreEqual(mon, wed);
-            Assert.AreEqual(mon, fri);
+            Assert.AreEqual(mon, sun);
         }
 
         [TestMethod]
-        public void WeekKey_UsesSaturdayDate()
+        public void WeekKey_UsesMondayDate()
         {
-            Assert.AreEqual("W2026-05-30", ReportPeriods.WeekKey(new DateTime(2026, 5, 30)));
+            Assert.AreEqual("W2026-06-01", ReportPeriods.WeekKey(new DateTime(2026, 6, 1)));
         }
 
         [TestMethod]
