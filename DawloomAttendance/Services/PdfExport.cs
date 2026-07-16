@@ -101,25 +101,21 @@ namespace DawloomAttendance.Services
                     Pair("Overtime pay" + (s.IncludeOvertime ? "" : " (excluded)"), s.OvertimePay.ToString("0")),
                 });
 
-                // Loan deductions table (Date / Payment / Remarks) — only when there are any.
+                // Loan deductions — one table per loan being repaid this month, each headed
+                // with the date the loan was taken and showing previous → paid → remaining.
                 if (s.Loans != null && s.Loans.Count > 0)
                 {
-                    var lh = section.AddParagraph("Loan deductions (Rs.)");
-                    lh.Format.Font.Bold = true; lh.Format.Font.Size = 11; lh.Format.Font.Color = BrandDark;
-                    lh.Format.SpaceBefore = Unit.FromCentimeter(0.3);
-                    lh.Format.SpaceAfter = Unit.FromCentimeter(0.12);
-                    lh.Format.Borders.Bottom = new Border { Width = 0.5, Color = RuleGray };
+                    var sec = section.AddParagraph("Loan deductions (Rs.)");
+                    sec.Format.Font.Bold = true; sec.Format.Font.Size = 11; sec.Format.Font.Color = BrandDark;
+                    sec.Format.SpaceBefore = Unit.FromCentimeter(0.3);
+                    sec.Format.SpaceAfter = Unit.FromCentimeter(0.12);
+                    sec.Format.Borders.Bottom = new Border { Width = 0.5, Color = RuleGray };
 
-                    var lheaders = new List<string> { "Date", "Payment", "Remarks" };
-                    var lrows = s.Loans
-                        .Select(x => (IList<string>)new List<string>
-                            { x.Date.ToString("yyyy-MM-dd"), x.Amount.ToString("0"), x.Remarks ?? "" })
-                        .ToList();
-                    RenderTable(section, lheaders, lrows);
+                    RenderLoanTables(section, s.Loans);
 
                     var tot = section.AddParagraph("Total loan deduction:   Rs. " + s.LoanDeduction.ToString("0"));
                     tot.Format.Font.Bold = true; tot.Format.Font.Color = BrandDark;
-                    tot.Format.SpaceBefore = Unit.FromCentimeter(0.12);
+                    tot.Format.SpaceBefore = Unit.FromCentimeter(0.14);
                 }
 
                 // Highlighted net-pay banner in the brand tint.
@@ -267,6 +263,99 @@ namespace DawloomAttendance.Services
                     p.Format.LeftIndent = Unit.FromCentimeter(0.1);
                 }
             }
+        }
+
+        /// <summary>
+        /// Renders the per-loan breakdown tables two side-by-side per row: each loan gets a
+        /// dark title bar (date • type • total) over a Previous → Paid → Remaining mini-table.
+        /// </summary>
+        private static void RenderLoanTables(Section section, IList<Data.Entities.LoanLine> loans)
+        {
+            var table = section.AddTable();
+            table.Borders.Width = 0;
+            table.AddColumn(Unit.FromCentimeter(4.6));  // label A
+            table.AddColumn(Unit.FromCentimeter(2.4));  // value A
+            table.AddColumn(Unit.FromCentimeter(0.7));  // spacer between the two tables
+            table.AddColumn(Unit.FromCentimeter(4.6));  // label B
+            table.AddColumn(Unit.FromCentimeter(2.4));  // value B
+
+            for (int i = 0; i < loans.Count; i += 2)
+            {
+                var a = loans[i];
+                var b = (i + 1 < loans.Count) ? loans[i + 1] : null;
+
+                var hr = table.AddRow();
+                hr.Height = Unit.FromCentimeter(0.6);
+                hr.VerticalAlignment = VerticalAlignment.Center;
+                LoanHeaderCell(hr.Cells[0], a);
+                if (b != null) LoanHeaderCell(hr.Cells[3], b);
+
+                LoanDataRow(table, "Previous remaining", a.PrevOutstanding,
+                            b != null, "Previous remaining", b?.PrevOutstanding ?? 0);
+                LoanDataRow(table, "Installment paid this month", a.Amount,
+                            b != null, "Installment paid this month", b?.Amount ?? 0);
+                LoanDataRow(table, "Remaining" + (a.IsSettled ? " (settled)" : ""), a.NewOutstanding,
+                            b != null, "Remaining" + (b != null && b.IsSettled ? " (settled)" : ""), b?.NewOutstanding ?? 0);
+
+                // App-generated deduction note (installment count / one-time, plus the salary month).
+                var nr = table.AddRow();
+                nr.VerticalAlignment = VerticalAlignment.Center;
+                LoanNoteCell(nr.Cells[0], a.DeductionNote);
+                if (b != null) LoanNoteCell(nr.Cells[3], b.DeductionNote);
+
+                var gap = table.AddRow();          // vertical gap between pairs
+                gap.Height = Unit.FromCentimeter(0.18);
+                gap.Borders.Width = 0;
+            }
+        }
+
+        private static string LoanHeaderText(Data.Entities.LoanLine loan)
+            => "Loan taken " + loan.Date.ToString("yyyy-MM-dd") +
+               (string.IsNullOrWhiteSpace(loan.LoanType) ? "" : "  •  " + loan.LoanType) +
+               "  •  Total Rs. " + loan.LoanAmount.ToString("0") +
+               (string.IsNullOrWhiteSpace(loan.Remarks) ? "" : "  •  " + loan.Remarks);
+
+        private static void LoanHeaderCell(Cell cell, Data.Entities.LoanLine loan)
+        {
+            cell.MergeRight = 1;                    // span the loan's label + value columns
+            cell.Shading.Color = BrandDark;
+            var p = cell.AddParagraph(LoanHeaderText(loan));
+            p.Format.Font.Color = Colors.White; p.Format.Font.Bold = true; p.Format.Font.Size = 8.5;
+            p.Format.LeftIndent = Unit.FromCentimeter(0.1);
+        }
+
+        private static void LoanDataRow(Table table, string labelA, double valueA,
+            bool hasB, string labelB, double valueB)
+        {
+            var r = table.AddRow();
+            r.Height = Unit.FromCentimeter(0.5);
+            r.VerticalAlignment = VerticalAlignment.Center;
+            LoanDataCell(r.Cells[0], labelA, false);
+            LoanDataCell(r.Cells[1], valueA.ToString("0"), true);
+            if (hasB)
+            {
+                LoanDataCell(r.Cells[3], labelB, false);
+                LoanDataCell(r.Cells[4], valueB.ToString("0"), true);
+            }
+        }
+
+        private static void LoanDataCell(Cell cell, string text, bool bold)
+        {
+            cell.Borders.Width = 0.5; cell.Borders.Color = RuleGray;
+            var p = cell.AddParagraph(text ?? "");
+            p.Format.LeftIndent = Unit.FromCentimeter(0.1);
+            p.Format.Font.Size = 9;
+            if (bold) p.Format.Font.Bold = true;
+        }
+
+        // Full-width caption row (spans a loan's two columns) with the app-generated note.
+        private static void LoanNoteCell(Cell cell, string text)
+        {
+            cell.MergeRight = 1;
+            cell.Borders.Width = 0.5; cell.Borders.Color = RuleGray;
+            var p = cell.AddParagraph(text ?? "");
+            p.Format.LeftIndent = Unit.FromCentimeter(0.1);
+            p.Format.Font.Size = 8; p.Format.Font.Italic = true; p.Format.Font.Color = LabelGray;
         }
 
         private static KeyValuePair<string, string> Pair(string k, string v)

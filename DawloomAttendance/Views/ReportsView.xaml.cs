@@ -137,27 +137,28 @@ namespace DawloomAttendance.Views
             IDictionary<string, Data.Entities.Shift> shiftByEnroll)
         {
             // Build per-employee rows with a numeric % so we can rank them.
+            // Attendance % is days-based (present ÷ working days) — the same formula the
+            // emailed per-employee report uses (see EmployeeReport.BuildSummary), so the two
+            // reports always agree.
             var summaries = data.GroupBy(d => d.EnrollNumber).Select(g =>
             {
                 shiftByEnroll.TryGetValue(g.Key, out var shift);
-                double shiftHours = ShiftHours(shift);
                 int workingDays = g.Count(x => x.IsWorkingDay);
-                double workedWorkingDays = g.Where(x => x.IsWorkingDay).Sum(x => x.WorkedHours);
-                double expected = workingDays * shiftHours;
+                int present = g.Count(x => x.Present);
                 return new
                 {
                     Enroll = g.Key,
                     Shift = ShiftDisplay(shift),
                     WorkingDays = workingDays,
-                    Present = g.Count(x => x.Present),
+                    Present = present,
                     Absent = g.Count(x => x.Absent),
                     LateDays = g.Count(x => x.Late),
                     LateMinutes = g.Where(x => x.Late).Sum(x => x.LateMinutes),
                     Worked = g.Sum(x => x.WorkedHours),
-                    Pct = (shiftHours > 0 && expected > 0) ? (double?)(workedWorkingDays / expected * 100) : null
+                    Pct = workingDays > 0 ? (double?)(100.0 * present / workingDays) : null
                 };
             })
-            .OrderByDescending(x => x.Pct ?? -1)   // highest attendance first; no-shift to the bottom
+            .OrderByDescending(x => x.Pct ?? -1)   // highest attendance first
             .ThenBy(x => SortKey(x.Enroll))
             .ToList();
 
@@ -195,8 +196,6 @@ namespace DawloomAttendance.Views
             }
             return t;
         }
-
-        private static double ShiftHours(Data.Entities.Shift s) => PayrollCalculator.ShiftHours(s);
 
         private static string ShiftDisplay(Data.Entities.Shift s)
             => s == null ? "—" : $"{s.Name} ({s.StartTime}-{s.EndTime})";

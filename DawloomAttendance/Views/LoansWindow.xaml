@@ -35,14 +35,22 @@
                 </DataGrid.Columns>
             </DataGrid>
 
-            <!-- Detail: the selected employee's individual loans -->
-            <DockPanel Grid.Column="1">
-                <TextBlock x:Name="DetailHeader" DockPanel.Dock="Top" Text="Select an employee to see their loans"
+            <!-- Detail: the selected employee's loans (top) + full ledger (bottom) -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" x:Name="DetailHeader" Text="Select an employee to see their loans"
                            FontWeight="SemiBold" Margin="0,0,0,6" />
-                <DataGrid x:Name="DetailGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                <DataGrid Grid.Row="1" x:Name="DetailGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
                           SelectionMode="Single" GridLinesVisibility="Horizontal" HeadersVisibility="Column">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Date" Binding="{Binding Date, StringFormat=yyyy-MM-dd}" Width="90" />
+                        <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="85" />
                         <DataGridTextColumn Header="Payment" Binding="{Binding Amount, StringFormat=0}" Width="75" />
                         <DataGridTextColumn Header="Installment" Binding="{Binding InstallmentDisplay}" Width="80" />
                         <DataGridTextColumn Header="Deducted" Binding="{Binding Deducted, StringFormat=0}" Width="75" />
@@ -50,7 +58,24 @@
                         <DataGridTextColumn Header="Remarks" Binding="{Binding Remarks}" Width="*" />
                     </DataGrid.Columns>
                 </DataGrid>
-            </DockPanel>
+
+                <TextBlock Grid.Row="2" Text="Ledger" FontWeight="SemiBold" Margin="0,10,0,6" />
+                <DataGrid Grid.Row="3" x:Name="LedgerGrid" AutoGenerateColumns="False" IsReadOnly="True" CanUserAddRows="False"
+                          SelectionMode="Single" GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                          HorizontalScrollBarVisibility="Auto"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto" ScrollViewer.CanContentScroll="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Date" Binding="{Binding Date, StringFormat=yyyy-MM-dd}" Width="90" />
+                        <DataGridTextColumn Header="Entry" Binding="{Binding Type}" Width="80" />
+                        <DataGridTextColumn Header="Loan type" Binding="{Binding Category}" Width="80" />
+                        <DataGridTextColumn Header="Month" Binding="{Binding Period}" Width="95" />
+                        <DataGridTextColumn Header="Debit" Binding="{Binding DebitDisplay}" Width="65" />
+                        <DataGridTextColumn Header="Credit" Binding="{Binding CreditDisplay}" Width="65" />
+                        <DataGridTextColumn Header="Balance" Binding="{Binding Balance, StringFormat=0}" Width="75" />
+                        <DataGridTextColumn Header="Remarks" Binding="{Binding Remarks}" Width="240" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
         </Grid>
 
         <TextBlock Grid.Row="2" x:Name="StatusText" Foreground="Gray" Margin="0,8,0,0" />

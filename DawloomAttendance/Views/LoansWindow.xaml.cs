@@ -39,12 +39,14 @@ namespace DawloomAttendance.Views
             if (string.IsNullOrEmpty(enroll))
             {
                 DetailGrid.ItemsSource = null;
+                LedgerGrid.ItemsSource = null;
                 DetailHeader.Text = "Select an employee to see their loans";
                 return;
             }
             var sum = MasterGrid.SelectedItem as LoanSummary;
             DetailHeader.Text = $"Loans for {enroll} — {sum?.Name}   (outstanding {sum?.Outstanding:0})";
             DetailGrid.ItemsSource = _db.GetLoans(enroll);
+            LedgerGrid.ItemsSource = _db.GetLoanLedger(enroll);
         }
 
         private void SelectEnroll(string enroll)

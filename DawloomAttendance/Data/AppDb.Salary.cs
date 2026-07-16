@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS Loan (
     Id           INTEGER PRIMARY KEY AUTOINCREMENT,
     EnrollNumber TEXT NOT NULL,
     Date         TEXT NOT NULL,
+    Type         TEXT,                       -- category, e.g. Advance / Personal / Emergency
     Amount       REAL NOT NULL,
     Installment  REAL NOT NULL DEFAULT 0,   -- 0 = deduct the whole amount at once
     Deducted     REAL NOT NULL DEFAULT 0,
@@ -31,16 +32,23 @@ CREATE TABLE IF NOT EXISTS Loan (
 );
 CREATE INDEX IF NOT EXISTS IX_Loan_Enroll ON Loan(EnrollNumber);
 
--- One line per loan deduction on a slip (the slip's Date/Payment/Remarks loan table).
+-- One line per loan deduction on a slip. LoanAmount/PrevOutstanding/NewOutstanding are
+-- snapshotted so the slip can show previous remaining, installment paid and remaining,
+-- and re-generate identically.
 CREATE TABLE IF NOT EXISTS LoanDeduction (
-    Id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    LoanId       INTEGER NOT NULL,
-    EnrollNumber TEXT NOT NULL,
-    PeriodKey    TEXT NOT NULL,
-    LoanDate     TEXT NOT NULL,
-    Amount       REAL NOT NULL,
-    Remarks      TEXT,
-    DeductedAt   TEXT NOT NULL
+    Id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    LoanId          INTEGER NOT NULL,
+    EnrollNumber    TEXT NOT NULL,
+    PeriodKey       TEXT NOT NULL,
+    LoanDate        TEXT NOT NULL,
+    Amount          REAL NOT NULL,
+    LoanAmount      REAL NOT NULL DEFAULT 0,
+    Installment     REAL NOT NULL DEFAULT 0,
+    PrevOutstanding REAL NOT NULL DEFAULT 0,
+    NewOutstanding  REAL NOT NULL DEFAULT 0,
+    LoanType        TEXT,
+    Remarks         TEXT,
+    DeductedAt      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS IX_LoanDeduction_Slip ON LoanDeduction(EnrollNumber, PeriodKey);
 
@@ -88,6 +96,14 @@ CREATE TABLE IF NOT EXISTS SalarySlip (
 );";
                 cmd.ExecuteNonQuery();
             }
+
+            // Databases created before the per-loan slip breakdown / loan type lack these columns.
+            MigrateColumn(conn, "Loan", "Type", "TEXT");
+            MigrateColumn(conn, "LoanDeduction", "LoanAmount", "REAL NOT NULL DEFAULT 0");
+            MigrateColumn(conn, "LoanDeduction", "Installment", "REAL NOT NULL DEFAULT 0");
+            MigrateColumn(conn, "LoanDeduction", "PrevOutstanding", "REAL NOT NULL DEFAULT 0");
+            MigrateColumn(conn, "LoanDeduction", "NewOutstanding", "REAL NOT NULL DEFAULT 0");
+            MigrateColumn(conn, "LoanDeduction", "LoanType", "TEXT");
         }
 
         // ---- Loans ------------------------------------------------------------------
@@ -100,11 +116,12 @@ CREATE TABLE IF NOT EXISTS SalarySlip (
                 using (var cmd = conn.CreateCommand())
                 {
                     cmd.CommandText = @"
-INSERT INTO Loan (EnrollNumber, Date, Amount, Installment, Deducted, Remarks, CreatedAt)
-VALUES ($e, $d, $a, $i, 0, $r, $at);
+INSERT INTO Loan (EnrollNumber, Date, Type, Amount, Installment, Deducted, Remarks, CreatedAt)
+VALUES ($e, $d, $ty, $a, $i, 0, $r, $at);
 SELECT last_insert_rowid();";
                     cmd.Parameters.AddWithValue("$e", loan.EnrollNumber ?? string.Empty);
                     cmd.Parameters.AddWithValue("$d", loan.Date.ToString(DateFormat));
+                    cmd.Parameters.AddWithValue("$ty", (object)loan.Type ?? DBNull.Value);
                     cmd.Parameters.AddWithValue("$a", loan.Amount);
                     cmd.Parameters.AddWithValue("$i", loan.Installment);
                     cmd.Parameters.AddWithValue("$r", (object)loan.Remarks ?? DBNull.Value);
@@ -139,7 +156,7 @@ SELECT last_insert_rowid();";
             using (var cmd = conn.CreateCommand())
             {
                 cmd.CommandText = @"
-SELECT Id, EnrollNumber, Date, Amount, Installment, Deducted, Remarks, CreatedAt
+SELECT Id, EnrollNumber, Date, Amount, Installment, Deducted, Remarks, CreatedAt, Type
 FROM Loan WHERE EnrollNumber=$e ORDER BY Date, Id;";
                 cmd.Parameters.AddWithValue("$e", enroll ?? string.Empty);
                 using (var r = cmd.ExecuteReader())
@@ -153,7 +170,8 @@ FROM Loan WHERE EnrollNumber=$e ORDER BY Date, Id;";
                             Installment = r.GetDouble(4),
                             Deducted = r.GetDouble(5),
                             Remarks = r.IsDBNull(6) ? null : r.GetString(6),
-                            CreatedAt = ParseTime(r.GetString(7))
+                            CreatedAt = ParseTime(r.GetString(7)),
+                            Type = r.IsDBNull(8) ? null : r.GetString(8)
                         });
             }
             return list;
@@ -189,6 +207,93 @@ ORDER BY Outstanding DESC, CAST(e.EnrollNumber AS INTEGER);";
             return list;
         }
 
+        /// <summary>
+        /// One employee's loan ledger: every loan taken (a debit) and every installment paid
+        /// on a slip (a credit, tagged with the month it was deducted), ordered chronologically
+        /// with a running outstanding balance.
+        /// </summary>
+        public IReadOnlyList<LoanLedgerEntry> GetLoanLedger(string enroll)
+        {
+            var entries = new List<LoanLedgerEntry>();
+            using (var conn = Open())
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT Date, Amount, Remarks, Type FROM Loan WHERE EnrollNumber=$e;";
+                    cmd.Parameters.AddWithValue("$e", enroll ?? string.Empty);
+                    using (var r = cmd.ExecuteReader())
+                        while (r.Read())
+                        {
+                            string loanType = r.IsDBNull(3) ? null : r.GetString(3);
+                            string remarks = r.IsDBNull(2) ? null : r.GetString(2);
+                            entries.Add(new LoanLedgerEntry
+                            {
+                                Date = ParseDate(r.GetString(0)),
+                                Type = "Loan taken",
+                                Category = loanType,
+                                Debit = r.GetDouble(1),
+                                Remarks = remarks
+                            });
+                        }
+                }
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = @"
+SELECT PeriodKey, Amount, LoanDate, LoanType, LoanAmount, Installment, NewOutstanding
+FROM LoanDeduction WHERE EnrollNumber=$e;";
+                    cmd.Parameters.AddWithValue("$e", enroll ?? string.Empty);
+                    using (var r = cmd.ExecuteReader())
+                        while (r.Read())
+                        {
+                            string period = r.GetString(0);
+                            var monthStart = MonthKeyToDate(period);
+                            // Date the payment to month-end (when salary is paid) so it always
+                            // sorts after a loan taken earlier that same month.
+                            var paidOn = monthStart == default ? default : monthStart.AddMonths(1).AddDays(-1);
+                            string monthLabel = MonthKeyLabel(period);
+                            entries.Add(new LoanLedgerEntry
+                            {
+                                Date = paidOn,
+                                Type = "Installment",
+                                Category = r.IsDBNull(3) ? null : r.GetString(3),
+                                Period = monthLabel,
+                                Credit = r.GetDouble(1),
+                                Remarks = LoanLine.BuildDeductionNote(r.GetDouble(4), r.GetDouble(5), r.GetDouble(6), monthLabel, compact: true)
+                            });
+                        }
+                }
+            }
+
+            // Chronological, with a loan taken sorted before a payment on the same date.
+            entries = entries
+                .OrderBy(x => x.Date)
+                .ThenBy(x => x.Type == "Loan taken" ? 0 : 1)
+                .ToList();
+
+            double balance = 0;
+            foreach (var e in entries)
+            {
+                balance += e.Debit - e.Credit;
+                e.Balance = Math.Max(0, balance);
+            }
+            return entries;
+        }
+
+        /// <summary>"M2026-07" → the first of that month; falls back to today if unparseable.</summary>
+        private static DateTime MonthKeyToDate(string periodKey)
+        {
+            var s = (periodKey ?? "").TrimStart('M');
+            return DateTime.TryParseExact(s, "yyyy-MM", null,
+                System.Globalization.DateTimeStyles.None, out var d) ? d : default;
+        }
+
+        /// <summary>"M2026-07" → "July 2026".</summary>
+        private static string MonthKeyLabel(string periodKey)
+        {
+            var d = MonthKeyToDate(periodKey);
+            return d == default ? periodKey : d.ToString("MMMM yyyy");
+        }
+
         // ---- Salary batch / slip snapshots ------------------------------------------
 
         public bool SalaryBatchExists(string periodKey)
@@ -216,9 +321,10 @@ ORDER BY Outstanding DESC, CAST(e.EnrollNumber AS INTEGER);";
             {
                 InsertBatch(conn, tx, periodKey, from, to);
 
+                string periodLabel = MonthKeyLabel(periodKey);
                 foreach (var slip in baseSlips)
                 {
-                    var outstanding = ReadOutstandingLoans(conn, tx, slip.Enroll);
+                    var outstanding = ReadOutstandingLoans(conn, tx, slip.Enroll, to);
                     var lines = new List<LoanLine>();
                     double loanTotal = 0;
 
@@ -226,10 +332,24 @@ ORDER BY Outstanding DESC, CAST(e.EnrollNumber AS INTEGER);";
                     {
                         double take = loan.NextDeduction;
                         if (take <= 0) continue;
+                        double prevOut = loan.Outstanding;         // before this month
+                        double newOut = Math.Max(0, prevOut - take); // after this month
                         loanTotal += take;
-                        lines.Add(new LoanLine { Date = loan.Date, Amount = take, Remarks = loan.Remarks });
+                        lines.Add(new LoanLine
+                        {
+                            Date = loan.Date,
+                            LoanType = loan.Type,
+                            Amount = take,
+                            Remarks = loan.Remarks,
+                            LoanAmount = loan.Amount,
+                            Installment = loan.Installment,
+                            PrevOutstanding = prevOut,
+                            NewOutstanding = newOut,
+                            PeriodLabel = periodLabel
+                        });
 
-                        InsertLoanDeduction(conn, tx, loan.Id, slip.Enroll, periodKey, loan.Date, take, loan.Remarks);
+                        InsertLoanDeduction(conn, tx, loan.Id, slip.Enroll, periodKey,
+                            loan.Date, take, loan.Amount, loan.Installment, prevOut, newOut, loan.Type, loan.Remarks);
                         BumpLoanDeducted(conn, tx, loan.Id, take);
                     }
 
@@ -267,16 +387,19 @@ VALUES ($p, $f, $t, $at, 0);";
             }
         }
 
-        private List<Loan> ReadOutstandingLoans(SQLiteConnection conn, SQLiteTransaction tx, string enroll)
+        private List<Loan> ReadOutstandingLoans(SQLiteConnection conn, SQLiteTransaction tx, string enroll, DateTime periodEnd)
         {
             var list = new List<Loan>();
             using (var cmd = conn.CreateCommand())
             {
                 cmd.Transaction = tx;
+                // Only loans taken on or before the period end are deductible this month —
+                // a loan can't be repaid before it exists.
                 cmd.CommandText = @"
-SELECT Id, EnrollNumber, Date, Amount, Installment, Deducted, Remarks
-FROM Loan WHERE EnrollNumber=$e AND (Amount - Deducted) > 0.0001 ORDER BY Date, Id;";
+SELECT Id, EnrollNumber, Date, Amount, Installment, Deducted, Remarks, Type
+FROM Loan WHERE EnrollNumber=$e AND (Amount - Deducted) > 0.0001 AND Date <= $to ORDER BY Date, Id;";
                 cmd.Parameters.AddWithValue("$e", enroll ?? string.Empty);
+                cmd.Parameters.AddWithValue("$to", periodEnd.ToString(DateFormat));
                 using (var r = cmd.ExecuteReader())
                     while (r.Read())
                         list.Add(new Loan
@@ -287,26 +410,34 @@ FROM Loan WHERE EnrollNumber=$e AND (Amount - Deducted) > 0.0001 ORDER BY Date, 
                             Amount = r.GetDouble(3),
                             Installment = r.GetDouble(4),
                             Deducted = r.GetDouble(5),
-                            Remarks = r.IsDBNull(6) ? null : r.GetString(6)
+                            Remarks = r.IsDBNull(6) ? null : r.GetString(6),
+                            Type = r.IsDBNull(7) ? null : r.GetString(7)
                         });
             }
             return list;
         }
 
         private static void InsertLoanDeduction(SQLiteConnection conn, SQLiteTransaction tx,
-            long loanId, string enroll, string periodKey, DateTime loanDate, double amount, string remarks)
+            long loanId, string enroll, string periodKey, DateTime loanDate, double amount,
+            double loanAmount, double installment, double prevOutstanding, double newOutstanding, string loanType, string remarks)
         {
             using (var cmd = conn.CreateCommand())
             {
                 cmd.Transaction = tx;
                 cmd.CommandText = @"
-INSERT INTO LoanDeduction (LoanId, EnrollNumber, PeriodKey, LoanDate, Amount, Remarks, DeductedAt)
-VALUES ($l, $e, $p, $d, $a, $r, $at);";
+INSERT INTO LoanDeduction
+ (LoanId, EnrollNumber, PeriodKey, LoanDate, Amount, LoanAmount, Installment, PrevOutstanding, NewOutstanding, LoanType, Remarks, DeductedAt)
+VALUES ($l, $e, $p, $d, $a, $la, $inst, $po, $no, $ty, $r, $at);";
                 cmd.Parameters.AddWithValue("$l", loanId);
                 cmd.Parameters.AddWithValue("$e", enroll ?? string.Empty);
                 cmd.Parameters.AddWithValue("$p", periodKey);
                 cmd.Parameters.AddWithValue("$d", loanDate.ToString(DateFormat));
                 cmd.Parameters.AddWithValue("$a", amount);
+                cmd.Parameters.AddWithValue("$la", loanAmount);
+                cmd.Parameters.AddWithValue("$inst", installment);
+                cmd.Parameters.AddWithValue("$po", prevOutstanding);
+                cmd.Parameters.AddWithValue("$no", newOutstanding);
+                cmd.Parameters.AddWithValue("$ty", (object)loanType ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("$r", (object)remarks ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("$at", DateTime.Now.ToString(TimeFormat));
                 cmd.ExecuteNonQuery();
@@ -424,17 +555,24 @@ FROM SalarySlip WHERE PeriodKey=$p ORDER BY CAST(EnrollNumber AS INTEGER);";
                     using (var cmd = conn.CreateCommand())
                     {
                         cmd.CommandText = @"
-SELECT LoanDate, Amount, Remarks FROM LoanDeduction
+SELECT LoanDate, Amount, LoanAmount, PrevOutstanding, NewOutstanding, Remarks, LoanType, Installment FROM LoanDeduction
 WHERE PeriodKey=$p AND EnrollNumber=$e ORDER BY LoanDate, Id;";
                         cmd.Parameters.AddWithValue("$p", periodKey);
                         cmd.Parameters.AddWithValue("$e", s.Enroll);
+                        string periodLabel = MonthKeyLabel(periodKey);
                         using (var r = cmd.ExecuteReader())
                             while (r.Read())
                                 s.Loans.Add(new LoanLine
                                 {
                                     Date = ParseDate(r.GetString(0)),
                                     Amount = r.GetDouble(1),
-                                    Remarks = r.IsDBNull(2) ? null : r.GetString(2)
+                                    LoanAmount = r.GetDouble(2),
+                                    PrevOutstanding = r.GetDouble(3),
+                                    NewOutstanding = r.GetDouble(4),
+                                    Remarks = r.IsDBNull(5) ? null : r.GetString(5),
+                                    LoanType = r.IsDBNull(6) ? null : r.GetString(6),
+                                    Installment = r.GetDouble(7),
+                                    PeriodLabel = periodLabel
                                 });
                     }
                 }
