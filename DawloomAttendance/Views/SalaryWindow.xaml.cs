@@ -25,7 +25,27 @@ namespace DawloomAttendance.Views
             InitializeComponent();
             _db = db;
             InitPickers();
+            LoadGenerateOptions();
             Reload();
+        }
+
+        private bool _loadingOptions;
+
+        // The two generate options persist between sessions (default: both on).
+        private void LoadGenerateOptions()
+        {
+            _loadingOptions = true;   // don't let these programmatic sets re-save (and clobber) each other
+            OvertimeCheck.IsChecked = _db.GetSetting("Salary.IncludeOvertime") != "0";
+            DeductionCheck.IsChecked = _db.GetSetting("Salary.ApplyDeduction") != "0";
+            _loadingOptions = false;
+        }
+
+        // Persist each toggle immediately so the checkboxes keep their state across tabs/sessions.
+        private void Options_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_db == null || _loadingOptions) return;   // skip during InitializeComponent / load
+            _db.SetSetting("Salary.IncludeOvertime", OvertimeCheck.IsChecked == true ? "1" : "0");
+            _db.SetSetting("Salary.ApplyDeduction", DeductionCheck.IsChecked == true ? "1" : "0");
         }
 
         private void InitPickers()
@@ -75,12 +95,17 @@ namespace DawloomAttendance.Views
                 return;
             }
 
+            bool overtime = OvertimeCheck.IsChecked == true;
+            bool deduction = DeductionCheck.IsChecked == true;
+
             try
             {
-                var slips = SalaryService.GenerateMonth(_db, from, to);
+                var slips = SalaryService.GenerateMonth(_db, from, to, overtime, deduction);
                 Reload();
                 SelectKey(key);
-                StatusText.Text = $"Generated {slips.Count} slip(s) for {from:MMMM yyyy}. Loans deducted where outstanding.";
+                StatusText.Text = $"Generated {slips.Count} slip(s) for {from:MMMM yyyy}. " +
+                    $"Overtime {(overtime ? "included" : "excluded")}, " +
+                    $"deduction {(deduction ? "applied" : "off")}. Loans deducted where outstanding.";
             }
             catch (Exception ex)
             {
@@ -131,33 +156,38 @@ namespace DawloomAttendance.Views
                 return;
             }
 
-            var slips = SalaryService.Load(_db, b.PeriodKey);
-            if (slips.Count == 0) { Warn("No slips stored for this month."); return; }
+            var allSlips = SalaryService.Load(_db, b.PeriodKey);
+            if (allSlips.Count == 0) { Warn("No slips stored for this month."); return; }
 
-            if (MessageBox.Show(Window.GetWindow(this),
-                    $"Email {b.MonthYear} salary slips to employees?\n(Interns with no salary are skipped.)",
-                    "Send Slips", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            // Recipient: "All employees" (Enroll == null) or one selected person.
+            var recipient = RecipientCombo.SelectedItem as RecipientItem;
+            bool sendAll = recipient == null || recipient.Enroll == null;
+            var slips = sendAll
+                ? allSlips
+                : (IReadOnlyList<SalarySlip>)allSlips.Where(s => s.Enroll == recipient.Enroll).ToList();
+            if (slips.Count == 0) { Warn("No slip stored for that employee this month."); return; }
+
+            string prompt = sendAll
+                ? $"Email {b.MonthYear} salary slips to all employees?\n(Interns with no salary are skipped.)"
+                : $"Email the {b.MonthYear} salary slip to {recipient.Display}?";
+            if (MessageBox.Show(Window.GetWindow(this), prompt, "Send Slips",
+                    MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
             SendButton.IsEnabled = false;
-            StatusText.Text = "Sending salary slips …";
+            StatusText.Text = sendAll ? "Sending salary slips …" : $"Sending slip to {recipient.Display} …";
             try
             {
                 var names = _db.GetEmployees().ToDictionary(x => x.EnrollNumber);
-                var outcomes = await Task.Run(() => SalaryService.SendSlips(_db, email, b.MonthYear, slips, names));
-                _db.MarkBatchSent(b.PeriodKey, DateTime.Now);
+                // Live progress: shows who each slip is going to (marshalled to the UI thread).
+                var progress = new Progress<string>(m => StatusText.Text = m);
+                var outcomes = await Task.Run(() => SalaryService.SendSlips(_db, email, b.MonthYear, slips, names, progress));
+                // Only a full send marks the whole month as sent (and freezes it); a targeted
+                // one-off send just re-mails that person's copy without changing the month's state.
+                if (sendAll) _db.MarkBatchSent(b.PeriodKey, DateTime.Now);
                 Reload();
                 SelectKey(b.PeriodKey);
-
-                int sent = outcomes.Count(o => o.Sent);
-                int interns = outcomes.Count(o => !o.Sent && o.Error != null && o.Error.StartsWith("no salary"));
-                int noEmail = outcomes.Count(o => !o.Sent && o.Error == "no email address");
-                int failed = outcomes.Count(o => !o.Sent) - interns - noEmail;
-                StatusText.Text = $"Sent {sent}. Interns skipped: {interns}. No email: {noEmail}. Failed: {failed}.";
-                MessageBox.Show(Window.GetWindow(this),
-                    $"Sent {sent} of {outcomes.Count}.\nInterns skipped (no salary): {interns}\nNo email address: {noEmail}\nFailed: {failed}",
-                    "Send Slips", MessageBoxButton.OK,
-                    failed > 0 ? MessageBoxImage.Warning : MessageBoxImage.Information);
+                ShowSendSummary(b.MonthYear, outcomes);
             }
             catch (Exception ex)
             {
@@ -165,6 +195,31 @@ namespace DawloomAttendance.Views
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally { SendButton.IsEnabled = true; }
+        }
+
+        /// <summary>Post-send dialog: sent count plus who was skipped/failed, named.</summary>
+        private void ShowSendSummary(string monthYear, System.Collections.Generic.List<EmailSendOutcome> outcomes)
+        {
+            var sent = outcomes.Where(o => o.Sent).ToList();
+            var interns = outcomes.Where(o => !o.Sent && o.Error != null && o.Error.StartsWith("no salary")).ToList();
+            var noEmail = outcomes.Where(o => !o.Sent && o.Error == "no email address").ToList();
+            var failed = outcomes.Where(o => !o.Sent && !interns.Contains(o) && !noEmail.Contains(o)).ToList();
+
+            string List(System.Collections.Generic.List<EmailSendOutcome> xs) =>
+                string.Join("\n", xs.Take(20).Select(x => $"   • {x.Enroll} — {x.Name}")) +
+                (xs.Count > 20 ? $"\n   … and {xs.Count - 20} more" : "");
+
+            var msg = $"Sent {sent.Count} of {outcomes.Count} for {monthYear}.";
+            if (noEmail.Count > 0) msg += $"\n\nNo email address ({noEmail.Count}):\n" + List(noEmail);
+            if (interns.Count > 0) msg += $"\n\nInterns skipped — no salary ({interns.Count}):\n" + List(interns);
+            if (failed.Count > 0)
+                msg += $"\n\nFailed ({failed.Count}):\n" +
+                       string.Join("\n", failed.Take(20).Select(x => $"   • {x.Enroll} — {x.Name}: {x.Error}"));
+
+            StatusText.Text = $"Sent {sent.Count}. No email: {noEmail.Count}. Interns: {interns.Count}. Failed: {failed.Count}.";
+            bool anyMissing = noEmail.Count > 0 || interns.Count > 0 || failed.Count > 0;
+            MessageBox.Show(Window.GetWindow(this), msg, "Send Slips", MessageBoxButton.OK,
+                anyMissing ? MessageBoxImage.Warning : MessageBoxImage.Information);
         }
 
         private void SaveScheduleButton_Click(object sender, RoutedEventArgs e)
@@ -191,6 +246,24 @@ namespace DawloomAttendance.Views
             var b = Selected;
             SchedDate.SelectedDate = b?.ScheduleDate;
             SchedEnabled.IsChecked = b?.ScheduleEnabled ?? false;
+            PopulateRecipients(b);
+        }
+
+        /// <summary>The email target: "All employees" plus each employee with a slip that month.</summary>
+        private sealed class RecipientItem
+        {
+            public string Enroll { get; set; }   // null = all employees
+            public string Display { get; set; }
+        }
+
+        private void PopulateRecipients(SalaryBatch b)
+        {
+            var items = new List<RecipientItem> { new RecipientItem { Enroll = null, Display = "All employees" } };
+            if (b != null)
+                foreach (var s in _db.GetSlipSnapshots(b.PeriodKey))
+                    items.Add(new RecipientItem { Enroll = s.Enroll, Display = $"{s.Enroll} — {s.Name}" });
+            RecipientCombo.ItemsSource = items;
+            RecipientCombo.SelectedIndex = 0;
         }
 
         private void Warn(string msg) =>

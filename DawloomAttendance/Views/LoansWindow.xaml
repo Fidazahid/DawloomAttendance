@@ -11,6 +11,7 @@
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
             <TextBlock Text="Loans" FontSize="16" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,16,0" />
             <Button x:Name="AddButton" Content="Add Loan" Width="100" Height="30" Margin="0,0,8,0" Click="AddButton_Click" />
+            <Button x:Name="EditButton" Content="Edit Loan" Width="100" Height="30" Margin="0,0,8,0" Click="EditLoanButton_Click" />
             <Button x:Name="DeleteButton" Content="Delete Loan" Width="100" Height="30" Margin="0,0,8,0" Click="DeleteLoanButton_Click" />
             <Button x:Name="RefreshButton" Content="Refresh" Width="80" Height="30" Click="RefreshButton_Click" />
         </StackPanel>

@@ -47,7 +47,7 @@ namespace DawloomAttendance.Services
         /// </summary>
         public static List<EmailSendOutcome> Send(AppDb db, EmailSettings email, IEnumerable<Employee> recipients,
             DateTime from, DateTime to, string subjectTemplate, string kind, string periodKey, bool skipAlreadySent,
-            string fromName = null)
+            string fromName = null, IProgress<string> progress = null)
         {
             fromName = string.IsNullOrWhiteSpace(fromName) ? email.FromNameReports : fromName;
             var outcomes = new List<EmailSendOutcome>();
@@ -65,8 +65,11 @@ namespace DawloomAttendance.Services
 
             string period = $"{from:yyyy-MM-dd} to {to:yyyy-MM-dd}";
 
+            int i = 0, total = plan.ToSend.Count;
             foreach (var e in plan.ToSend)
             {
+                i++;
+                progress?.Report($"Sending {i}/{total}: {e.Name ?? e.EnrollNumber} …");
                 byEnroll.TryGetValue(e.EnrollNumber, out var days);
                 days = days ?? new List<DailyAttendance>();
 

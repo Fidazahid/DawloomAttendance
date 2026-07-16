@@ -149,6 +149,128 @@ SELECT last_insert_rowid();";
             }
         }
 
+        /// <summary>
+        /// Updates an editable loan's fields (not Deducted — a recalculation resets that).
+        /// Call <see cref="RecalculateEmployeeLoans"/> afterwards to re-apply it to any slips.
+        /// </summary>
+        public void UpdateLoan(Loan loan)
+        {
+            using (var conn = Open())
+            {
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = @"
+UPDATE Loan SET Date=$d, Type=$ty, Amount=$a, Installment=$i, Remarks=$r WHERE Id=$id;";
+                    cmd.Parameters.AddWithValue("$d", loan.Date.ToString(DateFormat));
+                    cmd.Parameters.AddWithValue("$ty", (object)loan.Type ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$a", loan.Amount);
+                    cmd.Parameters.AddWithValue("$i", loan.Installment);
+                    cmd.Parameters.AddWithValue("$r", (object)loan.Remarks ?? DBNull.Value);
+                    cmd.Parameters.AddWithValue("$id", loan.Id);
+                    cmd.ExecuteNonQuery();
+                }
+                Audit(conn, "Loan edited", "Loan", loan.Id.ToString(),
+                    $"enroll {loan.EnrollNumber} amount {loan.Amount:0.##}" +
+                    (loan.Installment > 0 ? $" installment {loan.Installment:0.##}" : " (one-time)"));
+            }
+        }
+
+        /// <summary>
+        /// Rebuilds one employee's loan deductions across the UNSENT generated months: clears
+        /// their unsent deductions, rebases each loan's Deducted to the frozen portion already
+        /// deducted on ALREADY-SENT months, then replays their loans chronologically over the
+        /// unsent months — updating each unsent slip's LoanDeduction and NetPay (recomputed from
+        /// the stored pre-loan pay). Already-sent months are left untouched (a re-send is always a
+        /// copy of what was sent, and a loan is never re-deducted there). Attendance/pay and each
+        /// batch's schedule/sent state are preserved. Call after adding, editing, or deleting a loan.
+        /// </summary>
+        public void RecalculateEmployeeLoans(string enroll)
+        {
+            enroll = enroll ?? string.Empty;
+            using (var conn = Open())
+            using (var tx = conn.BeginTransaction())
+            {
+                // Drop deductions only for UNSENT months; sent months stay frozen.
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = @"
+DELETE FROM LoanDeduction WHERE EnrollNumber=$e
+  AND PeriodKey IN (SELECT PeriodKey FROM SalaryBatch WHERE SentAt IS NULL);";
+                    cmd.Parameters.AddWithValue("$e", enroll);
+                    cmd.ExecuteNonQuery();
+                }
+                // Rebase Deducted to what's still recorded (the frozen sent-month portions).
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = @"
+UPDATE Loan SET Deducted = COALESCE(
+    (SELECT SUM(ld.Amount) FROM LoanDeduction ld WHERE ld.LoanId = Loan.Id AND ld.EnrollNumber=$e), 0)
+WHERE EnrollNumber=$e;";
+                    cmd.Parameters.AddWithValue("$e", enroll);
+                    cmd.ExecuteNonQuery();
+                }
+
+                // Each UNSENT generated month, oldest first.
+                var batches = new List<Tuple<string, DateTime>>();
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.Transaction = tx;
+                    cmd.CommandText = "SELECT PeriodKey, PeriodTo FROM SalaryBatch WHERE SentAt IS NULL ORDER BY PeriodFrom;";
+                    using (var r = cmd.ExecuteReader())
+                        while (r.Read())
+                            batches.Add(Tuple.Create(r.GetString(0), ParseDate(r.GetString(1))));
+                }
+
+                foreach (var b in batches)
+                {
+                    // Reconstruct the pre-loan net from the stored slip; skip months with no slip.
+                    double basePay = 0, otPay = 0; bool includeOt = false, hasSlip = false;
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.Transaction = tx;
+                        cmd.CommandText = "SELECT BasePay, OvertimePay, IncludeOvertime FROM SalarySlip WHERE PeriodKey=$p AND EnrollNumber=$e;";
+                        cmd.Parameters.AddWithValue("$p", b.Item1);
+                        cmd.Parameters.AddWithValue("$e", enroll);
+                        using (var r = cmd.ExecuteReader())
+                            if (r.Read()) { hasSlip = true; basePay = r.GetDouble(0); otPay = r.GetDouble(1); includeOt = r.GetInt32(2) != 0; }
+                    }
+                    if (!hasSlip) continue;
+
+                    double loanTotal = 0;
+                    foreach (var loan in ReadOutstandingLoans(conn, tx, enroll, b.Item2))
+                    {
+                        double take = loan.NextDeduction;
+                        if (take <= 0) continue;
+                        double prevOut = loan.Outstanding;
+                        double newOut = Math.Max(0, prevOut - take);
+                        loanTotal += take;
+                        InsertLoanDeduction(conn, tx, loan.Id, enroll, b.Item1, loan.Date, take,
+                            loan.Amount, loan.Installment, prevOut, newOut, loan.Type, loan.Remarks);
+                        BumpLoanDeducted(conn, tx, loan.Id, take);
+                    }
+
+                    double grossNet = basePay + (includeOt ? otPay : 0);
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.Transaction = tx;
+                        cmd.CommandText = "UPDATE SalarySlip SET LoanDeduction=$ld, NetPay=$np WHERE PeriodKey=$p AND EnrollNumber=$e;";
+                        cmd.Parameters.AddWithValue("$ld", loanTotal);
+                        cmd.Parameters.AddWithValue("$np", Math.Max(0, grossNet - loanTotal));
+                        cmd.Parameters.AddWithValue("$p", b.Item1);
+                        cmd.Parameters.AddWithValue("$e", enroll);
+                        cmd.ExecuteNonQuery();
+                    }
+                }
+
+                tx.Commit();
+            }
+
+            using (var conn = Open())
+                Audit(conn, "Loans recalculated", "Loan", enroll, "replayed deductions across generated months");
+        }
+
         public IReadOnlyList<Loan> GetLoans(string enroll)
         {
             var list = new List<Loan>();

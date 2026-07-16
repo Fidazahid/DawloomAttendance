@@ -14,7 +14,8 @@ namespace DawloomAttendance.Services
             IDictionary<string, Employee> employees,
             IDictionary<string, Shift> shiftByEnroll,
             int latesPerDeduction,
-            bool includeOvertime)
+            bool includeOvertime,
+            bool applyDeduction = true)
         {
             var slips = new List<SalarySlip>();
 
@@ -42,7 +43,9 @@ namespace DawloomAttendance.Services
                 double payableDays = Math.Max(0, present + paidLeave - lateDeductionDays);
 
                 double dailyRate = workingDays > 0 ? salary / workingDays : 0;
-                double basePay = payableDays * dailyRate;
+                // Deduction on: pay for payable days only (absences/unpaid leave/lates cut pay).
+                // Deduction off: pay the full monthly salary regardless of attendance.
+                double basePay = applyDeduction ? payableDays * dailyRate : salary;
                 double hourlyRate = shiftHours > 0 ? dailyRate / shiftHours : 0;
                 double otPay = otHours * hourlyRate;
 

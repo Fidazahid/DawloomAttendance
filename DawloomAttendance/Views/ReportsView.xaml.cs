@@ -306,8 +306,10 @@ namespace DawloomAttendance.Views
             Summary.Text = "Sending emails …";
             try
             {
+                var progress = new Progress<string>(m => Summary.Text = m);   // live "sending to whom"
                 var outcomes = await System.Threading.Tasks.Task.Run(() =>
-                    ReportMailer.Send(_db, email, recipients, from, to, email.SubjectManual, "manual", periodKey: null, skipAlreadySent: false));
+                    ReportMailer.Send(_db, email, recipients, from, to, email.SubjectManual, "manual",
+                        periodKey: null, skipAlreadySent: false, progress: progress));
                 ShowOutcomeSummary("Send via Email", outcomes);
             }
             catch (Exception ex)

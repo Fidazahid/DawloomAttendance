@@ -76,9 +76,30 @@ namespace DawloomAttendance.Views
             var loan = dlg.Result;
             loan.EnrollNumber = enroll;
             _db.InsertLoan(loan);
+            _db.RecalculateEmployeeLoans(enroll);   // apply to any already-generated months (back-dated loans)
             ReloadMaster();
             SelectEnroll(enroll);
             StatusText.Text = $"Added loan of {loan.Amount:0} for {enroll}.";
+        }
+
+        private void EditLoanButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!(DetailGrid.SelectedItem is Loan loan))
+            {
+                MessageBox.Show(Window.GetWindow(this), "Select a loan to edit.", "Edit Loan",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var dlg = new LoanEditWindow(loan) { Owner = Window.GetWindow(this) };
+            if (dlg.ShowDialog() != true) return;
+
+            var updated = dlg.Result;               // carries the loan's Id + EnrollNumber
+            _db.UpdateLoan(updated);
+            _db.RecalculateEmployeeLoans(updated.EnrollNumber);
+            ReloadMaster();
+            SelectEnroll(updated.EnrollNumber);
+            StatusText.Text = $"Edited loan and recalculated {updated.EnrollNumber}.";
         }
 
         private void DeleteLoanButton_Click(object sender, RoutedEventArgs e)
@@ -89,21 +110,21 @@ namespace DawloomAttendance.Views
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
+
+            string warn = $"Delete this loan of {loan.Amount:0}?";
             if (loan.Deducted > 0)
-            {
-                MessageBox.Show(Window.GetWindow(this),
-                    "This loan has already been (partly) deducted on a salary slip and cannot be deleted.",
-                    "Delete Loan", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-            if (MessageBox.Show(Window.GetWindow(this), $"Delete this loan of {loan.Amount:0}?", "Delete Loan",
+                warn += "\n\nIt has already been deducted on generated salary slips — those months " +
+                        "will be recalculated (loan removed, net pay adjusted).";
+            if (MessageBox.Show(Window.GetWindow(this), warn, "Delete Loan",
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
             var enroll = loan.EnrollNumber;
             _db.DeleteLoan(loan.Id);
+            _db.RecalculateEmployeeLoans(enroll);
             ReloadMaster();
             SelectEnroll(enroll);
+            StatusText.Text = $"Deleted loan and recalculated {enroll}.";
         }
     }
 }

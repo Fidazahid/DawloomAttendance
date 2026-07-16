@@ -4,15 +4,38 @@ using DawloomAttendance.Data.Entities;
 
 namespace DawloomAttendance.Views
 {
-    /// <summary>Collects a new loan: Date, Payment (amount), optional Installment/month, Remarks.</summary>
+    /// <summary>Collects a new loan (or edits an existing one): Date, Type, Payment, optional Installment, Remarks.</summary>
     public partial class LoanEditWindow : Window
     {
         public Loan Result { get; private set; }
+
+        private long? _editId;        // set when editing an existing loan
+        private string _editEnroll;
 
         public LoanEditWindow()
         {
             InitializeComponent();
             DatePick.SelectedDate = DateTime.Today;
+        }
+
+        /// <summary>Opens the dialog pre-filled to edit an existing loan.</summary>
+        public LoanEditWindow(Loan existing) : this()
+        {
+            if (existing == null) return;
+            Title = "Edit Loan";
+            OkButton.Content = "Save";
+            _editId = existing.Id;
+            _editEnroll = existing.EnrollNumber;
+
+            DatePick.SelectedDate = existing.Date;
+            TypeBox.Text = existing.Type ?? string.Empty;
+            PaymentBox.Text = existing.Amount.ToString("0.##");
+            if (existing.Installment > 0)
+            {
+                InstallmentCheck.IsChecked = true;           // fires the handler → enables the box
+                InstallmentBox.Text = existing.Installment.ToString("0.##");
+            }
+            RemarksBox.Text = existing.Remarks ?? string.Empty;
         }
 
         // Enable the installment field only when installments are chosen.
@@ -51,6 +74,8 @@ namespace DawloomAttendance.Views
 
             Result = new Loan
             {
+                Id = _editId ?? 0,
+                EnrollNumber = _editEnroll,
                 Date = DatePick.SelectedDate ?? DateTime.Today,
                 Type = ReadType(),
                 Amount = amount,

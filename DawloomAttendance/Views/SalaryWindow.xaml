@@ -15,6 +15,12 @@
             <TextBlock Text="Generate for" VerticalAlignment="Center" Margin="0,0,6,0" />
             <ComboBox x:Name="MonthCombo" Width="110" VerticalAlignment="Center" Margin="0,0,6,0" />
             <ComboBox x:Name="YearCombo" Width="80" VerticalAlignment="Center" Margin="0,0,10,0" />
+            <CheckBox x:Name="OvertimeCheck" Content="Overtime" IsChecked="True" VerticalAlignment="Center" Margin="0,0,10,0"
+                      Checked="Options_Changed" Unchecked="Options_Changed"
+                      ToolTip="Add overtime pay to the slip. Unchecked = overtime not paid." />
+            <CheckBox x:Name="DeductionCheck" Content="Deduction" IsChecked="True" VerticalAlignment="Center" Margin="0,0,10,0"
+                      Checked="Options_Changed" Unchecked="Options_Changed"
+                      ToolTip="Deduct pay when attendance is below 100% (absences/unpaid leave/lates). Unchecked = full salary paid." />
             <Button x:Name="GenerateButton" Content="Generate" Width="90" Height="30" Margin="0,0,8,0" Click="GenerateButton_Click" />
             <Button x:Name="RefreshButton" Content="Refresh" Width="80" Height="30" Click="RefreshButton_Click" />
         </StackPanel>
@@ -36,8 +42,12 @@
         <Border Grid.Row="2" BorderBrush="#FFCCCCCC" BorderThickness="1" Padding="8" Margin="0,10,0,0">
             <StackPanel Orientation="Horizontal">
                 <Button x:Name="RegenButton" Content="Re-generate PDF" Width="130" Height="28" Margin="0,0,8,0" Click="RegenButton_Click" />
+                <TextBlock Text="Send to:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <ComboBox x:Name="RecipientCombo" Width="170" Height="26" VerticalAlignment="Center" Margin="0,0,8,0"
+                          DisplayMemberPath="Display"
+                          ToolTip="Choose all employees or one person to email the slip to." />
                 <Button x:Name="SendButton" Content="Send now (email)" Width="130" Height="28" Margin="0,0,16,0" Click="SendButton_Click"
-                        ToolTip="Email each employee their slip. Interns (no salary) are skipped." />
+                        ToolTip="Email the selected recipient their slip. Interns (no salary) are skipped." />
                 <TextBlock Text="Auto-send on:" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <DatePicker x:Name="SchedDate" Width="130" VerticalAlignment="Center" Margin="0,0,8,0" />
                 <CheckBox x:Name="SchedEnabled" Content="Enabled" VerticalAlignment="Center" Margin="0,0,8,0" />

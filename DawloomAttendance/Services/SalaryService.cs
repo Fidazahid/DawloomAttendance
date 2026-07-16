@@ -27,7 +27,8 @@ namespace DawloomAttendance.Services
         /// Generates a month's slips if not already generated (computing attendance/pay and
         /// applying outstanding loans, then snapshotting), or returns the existing snapshot.
         /// </summary>
-        public static IReadOnlyList<SalarySlip> GenerateMonth(AppDb db, DateTime from, DateTime to)
+        public static IReadOnlyList<SalarySlip> GenerateMonth(AppDb db, DateTime from, DateTime to,
+            bool includeOvertime = true, bool applyDeduction = true)
         {
             var periodKey = ReportPeriods.MonthKey(from);
             if (db.SalaryBatchExists(periodKey))
@@ -43,7 +44,7 @@ namespace DawloomAttendance.Services
             if (int.TryParse(lpdSetting, out var n) && n > 0) lpd = n;
 
             var data = new AttendanceService(db).ComputeForRange(from, to);
-            var baseSlips = PayrollCalculator.Compute(data, names, shiftByEnroll, lpd, includeOvertime: true);
+            var baseSlips = PayrollCalculator.Compute(data, names, shiftByEnroll, lpd, includeOvertime, applyDeduction);
 
             return db.GenerateAndSaveMonth(periodKey, from, to, baseSlips);
         }
@@ -56,12 +57,15 @@ namespace DawloomAttendance.Services
         /// and reported, as are employees without a valid email address.
         /// </summary>
         public static List<EmailSendOutcome> SendSlips(AppDb db, EmailSettings email, string periodLabel,
-            IReadOnlyList<SalarySlip> slips, IDictionary<string, Employee> names)
+            IReadOnlyList<SalarySlip> slips, IDictionary<string, Employee> names, IProgress<string> progress = null)
         {
             var outcomes = new List<EmailSendOutcome>();
+            int i = 0, total = slips.Count;
             foreach (var slip in slips)
             {
+                i++;
                 names.TryGetValue(slip.Enroll, out var emp);
+                progress?.Report($"Sending {i}/{total}: {slip.Name ?? slip.Enroll} …");
 
                 // No salary on the record → intern → do not send.
                 if (slip.Salary <= 0)
@@ -77,7 +81,12 @@ namespace DawloomAttendance.Services
                     continue;
                 }
 
-                var path = Path.Combine(Path.GetTempPath(), $"slip_{Safe(slip.Enroll)}_{Guid.NewGuid():N}.pdf");
+                // Attachment name the employee sees: EmployeeName_salarySlip_Month_YYYY.pdf.
+                // A unique temp subfolder keeps that friendly name without risking collisions.
+                var dir = Path.Combine(Path.GetTempPath(), "DawloomSlips", Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(dir);
+                var fileName = $"{Safe(slip.Name ?? slip.Enroll)}_salarySlip_{Safe(periodLabel)}.pdf";
+                var path = Path.Combine(dir, fileName);
                 try
                 {
                     PdfExport.WriteSalarySlips(path, periodLabel, new[] { slip });
@@ -90,7 +99,7 @@ namespace DawloomAttendance.Services
                 {
                     outcomes.Add(EmailSendOutcome.Fail(slip.Enroll, slip.Name, addr, ex.Message));
                 }
-                finally { try { File.Delete(path); } catch { /* temp file */ } }
+                finally { try { Directory.Delete(dir, true); } catch { /* temp files */ } }
             }
             return outcomes;
         }
