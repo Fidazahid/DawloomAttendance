@@ -52,6 +52,11 @@
                 <ComboBoxItem Content="Absentees" />
             </ComboBox>
             <Button x:Name="RunButton" Content="Run" Width="80" Height="28" Margin="0,0,8,6" Click="RunButton_Click" />
+            <Button x:Name="EditPunchesButton" Content="Edit Punches…" Width="120" Height="28" Margin="0,0,8,6" Click="EditPunchesButton_Click"
+                    ToolTip="Add a missed punch / fix punches for the selected row. Pick a dated report (Daily detail, Late arrivals, Absentees)." />
+            <CheckBox x:Name="AllowAbove100Check" Content="Allow % above 100%" VerticalAlignment="Center" Margin="0,0,12,6"
+                      Checked="AllowAbove100_Changed" Unchecked="AllowAbove100_Changed"
+                      ToolTip="Off: percentages are capped at 100%. On: extra hours (overtime, weekend/holiday work) can push it higher. Shared with the Salary screen and emailed reports." />
             <Button x:Name="ExportButton" Content="Export to Excel" Width="120" Height="28" Margin="0,0,8,6" Click="ExportButton_Click" IsEnabled="False" />
             <Button x:Name="ExportPdfButton" Content="Export to PDF" Width="110" Height="28" Margin="0,0,8,6" Click="ExportPdfButton_Click" IsEnabled="False" />
             <Button x:Name="EmailReportsButton" Content="Send via Email" Width="120" Height="28" Margin="0,0,0,6" Click="EmailReportsButton_Click"

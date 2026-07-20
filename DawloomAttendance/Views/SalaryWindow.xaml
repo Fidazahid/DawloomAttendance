@@ -21,6 +21,9 @@
             <CheckBox x:Name="DeductionCheck" Content="Deduction" IsChecked="True" VerticalAlignment="Center" Margin="0,0,10,0"
                       Checked="Options_Changed" Unchecked="Options_Changed"
                       ToolTip="Deduct pay when attendance is below 100% (absences/unpaid leave/lates). Unchecked = full salary paid." />
+            <CheckBox x:Name="AllowAbove100Check" Content="Allow % above 100%" VerticalAlignment="Center" Margin="0,0,10,0"
+                      Checked="AllowAbove100_Changed" Unchecked="AllowAbove100_Changed"
+                      ToolTip="Display only — never changes pay. Off: attendance % is capped at 100% on the slip. On: extra hours can show higher. Shared with the Reports screen and emailed reports." />
             <Button x:Name="GenerateButton" Content="Generate" Width="90" Height="30" Margin="0,0,8,0" Click="GenerateButton_Click" />
             <Button x:Name="RefreshButton" Content="Refresh" Width="80" Height="30" Click="RefreshButton_Click" />
         </StackPanel>

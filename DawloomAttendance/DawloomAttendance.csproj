@@ -284,6 +284,7 @@
     <Compile Include="Services\LoggingSetup.cs" />
     <Compile Include="Services\DailyAttendance.cs" />
     <Compile Include="Services\AttendanceCalculator.cs" />
+    <Compile Include="Services\AttendancePercentage.cs" />
     <Compile Include="Services\AttendanceService.cs" />
     <Compile Include="Services\ExcelExport.cs" />
     <Compile Include="Services\EmployeeImport.cs" />

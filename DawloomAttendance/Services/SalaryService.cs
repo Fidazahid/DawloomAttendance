@@ -89,7 +89,7 @@ namespace DawloomAttendance.Services
                 var path = Path.Combine(dir, fileName);
                 try
                 {
-                    PdfExport.WriteSalarySlips(path, periodLabel, new[] { slip });
+                    PdfExport.WriteSalarySlips(path, periodLabel, new[] { slip }, AttendancePercentage.AllowAbove100(db));
                     var subject = EmailService.FormatSubject(email.SubjectSlip, slip.Name ?? slip.Enroll, periodLabel);
                     var body = $"Dear {slip.Name},\r\n\r\nPlease find attached your salary slip for {periodLabel}.\r\n\r\nRegards,\r\n{email.FromNameSalary}";
                     EmailService.Send(email, addr, subject, body, path, email.FromNameSalary);

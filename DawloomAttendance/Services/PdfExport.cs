@@ -36,7 +36,7 @@ namespace DawloomAttendance.Services
             AddFooter(section);
 
             AddLetterhead(section, ContentWidthCm(doc), title, subtitle);
-            RenderTable(section, headers, rows);
+            RenderTable(section, headers, rows, ContentWidthCm(doc));
 
             Render(doc, path);
         }
@@ -58,13 +58,26 @@ namespace DawloomAttendance.Services
             dh.Format.Font.Bold = true; dh.Format.Font.Size = 11; dh.Format.Font.Color = BrandDark;
             dh.Format.SpaceBefore = Unit.FromCentimeter(0.4); dh.Format.SpaceAfter = Unit.FromCentimeter(0.12);
 
-            RenderTable(section, dailyHeaders, dailyRows);
+            RenderTable(section, dailyHeaders, dailyRows, ContentWidthCm(doc));
 
             Render(doc, path);
         }
 
-        /// <summary>Renders one salary-slip page per employee.</summary>
-        public static void WriteSalarySlips(string path, string period, IEnumerable<SalarySlip> slips)
+        /// <summary>Prints the stored (raw) attendance %, capped at 100% unless allowed above.</summary>
+        private static string FormatPct(double? raw, bool allowAbove100)
+        {
+            if (!raw.HasValue) return "—";
+            double v = allowAbove100 ? raw.Value : System.Math.Min(raw.Value, 100.0);
+            return v.ToString("0.#") + "%";
+        }
+
+        /// <summary>
+        /// Renders one salary-slip page per employee.
+        /// <paramref name="allowAbove100"/> only affects how the attendance % is printed —
+        /// the stored slip keeps the raw value and pay is never touched by it.
+        /// </summary>
+        public static void WriteSalarySlips(string path, string period, IEnumerable<SalarySlip> slips,
+            bool allowAbove100 = false)
         {
             var doc = NewDoc(Orientation.Portrait);
 
@@ -79,7 +92,9 @@ namespace DawloomAttendance.Services
                     Pair("Name", s.Name), Pair("Enroll #", s.Enroll), Pair("CNIC", s.Cnic),
                     Pair("Department", s.Department), Pair("Designation", s.Designation), Pair("Shift", s.Shift),
                 });
-                AddGroup(section, "Attendance", new[]
+                // Overtime off = overtime is not part of this payroll at all, so neither the
+                // hours nor the pay line appear anywhere on the slip.
+                var attendance = new List<KeyValuePair<string, string>>
                 {
                     Pair("Working days", s.WorkingDays.ToString()),
                     Pair("Present", s.Present.ToString()),
@@ -88,18 +103,25 @@ namespace DawloomAttendance.Services
                     Pair("Unpaid leave", s.UnpaidLeaveDays.ToString()),
                     Pair("Late count", s.LateCount.ToString()),
                     Pair("Late time", DurationFormat.Minutes(s.LateMinutes)),
+                    Pair("Expected hours", DurationFormat.Hours(s.ExpectedHours)),
                     Pair("Worked", DurationFormat.Hours(s.WorkedHours)),
-                    Pair("Overtime", DurationFormat.Hours(s.OvertimeHours)),
-                    Pair("Late deduction (days)", s.LateDeductionDays.ToString("0.##")),
-                    Pair("Payable days", s.PayableDays.ToString("0.##")),
-                });
-                AddGroup(section, "Earnings (Rs.)", new[]
+                };
+                if (s.IncludeOvertime)
+                    attendance.Add(Pair("Overtime", DurationFormat.Hours(s.OvertimeHours)));
+                attendance.Add(Pair("Attendance %", FormatPct(s.AttendancePct, allowAbove100)));
+                attendance.Add(Pair("Late deduction (days)", s.LateDeductionDays.ToString("0.##")));
+                attendance.Add(Pair("Payable days", s.PayableDays.ToString("0.##")));
+                AddGroup(section, "Attendance", attendance.ToArray());
+
+                var earnings = new List<KeyValuePair<string, string>>
                 {
                     Pair("Monthly salary", s.Salary.ToString("0")),
                     Pair("Daily rate", s.DailyRate.ToString("0")),
                     Pair("Base pay (payable days)", s.BasePay.ToString("0")),
-                    Pair("Overtime pay" + (s.IncludeOvertime ? "" : " (excluded)"), s.OvertimePay.ToString("0")),
-                });
+                };
+                if (s.IncludeOvertime)
+                    earnings.Add(Pair("Overtime pay", s.OvertimePay.ToString("0")));
+                AddGroup(section, "Earnings (Rs.)", earnings.ToArray());
 
                 // Loan deductions — one table per loan being repaid this month, each headed
                 // with the date the loan was taken and showing previous → paid → remaining.
@@ -222,32 +244,54 @@ namespace DawloomAttendance.Services
             footer.Format.Font.Size = 8; footer.Format.Font.Color = LabelGray;
         }
 
-        /// <summary>Styled header + striped rows table (header repeats on page breaks).</summary>
-        private static void RenderTable(Section section, IList<string> headers, IList<IList<string>> rows)
+        /// <summary>
+        /// Styled header + striped rows table (header repeats on page breaks).
+        /// Columns are sized to their content, then scaled down to fit
+        /// <paramref name="contentWidthCm"/> — without that, a wide report (many columns,
+        /// or long values like the shift label) runs off the right edge of the page and
+        /// the last columns are simply lost.
+        /// </summary>
+        private static void RenderTable(Section section, IList<string> headers, IList<IList<string>> rows,
+            double contentWidthCm)
         {
             var table = section.AddTable();
             table.Borders.Width = 0.25;
             table.Borders.Color = new Color(225, 225, 232);
 
+            // Natural width per column, from the longest value in it.
+            var widths = new double[headers.Count];
             for (int c = 0; c < headers.Count; c++)
             {
                 int maxLen = headers[c]?.Length ?? 0;
                 foreach (var row in rows)
                     if (c < row.Count) maxLen = Math.Max(maxLen, (row[c] ?? "").Length);
-                double cm = Math.Min(7.0, Math.Max(1.6, maxLen * 0.22));
-                table.AddColumn(Unit.FromCentimeter(cm));
+                widths[c] = Math.Min(7.0, Math.Max(1.6, maxLen * 0.22));
             }
+
+            double total = widths.Sum();
+            double fontScale = 1.0;
+            if (total > contentWidthCm && total > 0)
+            {
+                // Squeeze every column by the same factor so the table just fits, and ease
+                // the font down with it so the narrowed cells don't wrap into tall rows.
+                double scale = contentWidthCm / total;
+                for (int c = 0; c < widths.Length; c++) widths[c] *= scale;
+                fontScale = Math.Max(0.8, scale);
+            }
+
+            foreach (var w in widths) table.AddColumn(Unit.FromCentimeter(w));
 
             var head = table.AddRow();
             head.HeadingFormat = true;            // repeat the header row on every page
             head.Height = Unit.FromCentimeter(0.72);
             head.Shading.Color = BrandDark;
             head.Format.Font.Bold = true; head.Format.Font.Color = Colors.White;
+            head.Format.Font.Size = 9.5 * fontScale;
             head.VerticalAlignment = VerticalAlignment.Center;
             for (int c = 0; c < headers.Count; c++)
             {
                 var p = head.Cells[c].AddParagraph(headers[c] ?? "");
-                p.Format.LeftIndent = Unit.FromCentimeter(0.1);
+                p.Format.LeftIndent = Unit.FromCentimeter(0.08);
             }
 
             int i = 0;
@@ -256,11 +300,12 @@ namespace DawloomAttendance.Services
                 var r = table.AddRow();
                 r.Height = Unit.FromCentimeter(0.55);
                 r.VerticalAlignment = VerticalAlignment.Center;
+                r.Format.Font.Size = 9.5 * fontScale;
                 if (i++ % 2 == 1) r.Shading.Color = BrandTint;
                 for (int c = 0; c < headers.Count; c++)
                 {
                     var p = r.Cells[c].AddParagraph(c < row.Count ? (row[c] ?? "") : "");
-                    p.Format.LeftIndent = Unit.FromCentimeter(0.1);
+                    p.Format.LeftIndent = Unit.FromCentimeter(0.08);
                 }
             }
         }

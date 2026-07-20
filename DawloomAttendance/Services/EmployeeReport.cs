@@ -14,35 +14,47 @@ namespace DawloomAttendance.Services
         public static readonly string[] DailyHeaders =
             { "Date", "Status", "Check In", "Check Out", "Late", "Worked" };
 
-        /// <summary>Summary key/value pairs (working days, present, leave, attendance %, …).</summary>
-        public static List<KeyValuePair<string, string>> BuildSummary(IEnumerable<DailyAttendance> days)
+        /// <summary>
+        /// Summary key/value pairs (working days, present, leave, attendance %, …).
+        /// The percentage comes from <see cref="AttendancePercentage"/> — the same call the
+        /// Reports and Salary screens make, so the emailed number always matches the screen.
+        /// </summary>
+        public static List<KeyValuePair<string, string>> BuildSummary(
+            IEnumerable<DailyAttendance> days, Shift shift, bool allowAbove100, bool showOvertime = true)
         {
             var list = (days ?? Enumerable.Empty<DailyAttendance>()).ToList();
 
-            int workingDays = list.Count(d => d.IsWorkingDay);
-            int present = list.Count(d => d.Present);
             int absent = list.Count(d => d.Absent);
             int lateCount = list.Count(d => d.Late);
             int lateMinutes = list.Where(d => d.Late).Sum(d => d.LateMinutes);
-            double worked = list.Sum(d => d.WorkedHours);
             double overtime = list.Sum(d => d.OvertimeHours);
             int paidLeave = list.Count(d => d.IsLeave && d.PaidLeave);
             int unpaidLeave = list.Count(d => d.IsLeave && !d.PaidLeave);
-            double pct = workingDays > 0 ? Math.Round(100.0 * present / workingDays, 1) : 0;
+            var pct = AttendancePercentage.Compute(list, shift, allowAbove100);
 
-            return new List<KeyValuePair<string, string>>
+            var rows = new List<KeyValuePair<string, string>>
             {
-                Kv("Working days", workingDays.ToString()),
-                Kv("Present", present.ToString()),
+                Kv("Working days", pct.WorkingDays.ToString()),
+                Kv("Present", list.Count(d => d.Present).ToString()),
                 Kv("Absent", absent.ToString()),
                 Kv("Paid leave", paidLeave.ToString()),
                 Kv("Unpaid leave", unpaidLeave.ToString()),
                 Kv("Late count", lateCount.ToString()),
                 Kv("Late time", DurationFormat.Minutes(lateMinutes)),
-                Kv("Worked", DurationFormat.Hours(worked)),
-                Kv("Overtime", DurationFormat.Hours(overtime)),
-                Kv("Attendance %", pct.ToString("0.#") + "%"),
+                Kv("Expected hours", DurationFormat.Hours(pct.ExpectedHours)),
+                Kv("Worked", DurationFormat.Hours(pct.ActualHours)),
+                Kv("Attendance %", pct.Display),
             };
+
+            // Overtime turned off = it is not shown on any report, not just left out of pay.
+            if (showOvertime)
+                rows.Insert(rows.Count - 1, Kv("Overtime", DurationFormat.Hours(overtime)));
+
+            // Only shown when it actually happened, so it reads as an action item.
+            if (pct.MissingCheckoutDays > 0)
+                rows.Add(Kv("Days with no check-out", pct.MissingCheckoutDays + " (counted as 0 hours)"));
+
+            return rows;
         }
 
         /// <summary>Daily-detail rows (one per day, oldest first) matching <see cref="DailyHeaders"/>.</summary>
@@ -62,15 +74,20 @@ namespace DawloomAttendance.Services
                 .ToList();
         }
 
-        /// <summary>Writes the full per-employee report PDF for the given period.</summary>
-        public static void WritePdf(string path, Employee emp, DateTime from, DateTime to, IEnumerable<DailyAttendance> days)
+        /// <summary>
+        /// Writes the full per-employee report PDF for the given period.
+        /// <paramref name="shift"/> is the employee's assigned shift (Employee.ShiftId) —
+        /// it sets the expected hours the attendance % is measured against.
+        /// </summary>
+        public static void WritePdf(string path, Employee emp, DateTime from, DateTime to,
+            IEnumerable<DailyAttendance> days, Shift shift, bool allowAbove100, bool showOvertime = true)
         {
             PdfExport.WriteEmployeeReport(
                 path,
                 emp.Name ?? emp.EnrollNumber,
                 emp.EnrollNumber,
                 $"{from:yyyy-MM-dd} to {to:yyyy-MM-dd}",
-                BuildSummary(days),
+                BuildSummary(days, shift, allowAbove100, showOvertime),
                 DailyHeaders,
                 BuildDailyRows(days));
         }

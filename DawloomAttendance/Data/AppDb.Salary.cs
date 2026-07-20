@@ -104,6 +104,12 @@ CREATE TABLE IF NOT EXISTS SalarySlip (
             MigrateColumn(conn, "LoanDeduction", "PrevOutstanding", "REAL NOT NULL DEFAULT 0");
             MigrateColumn(conn, "LoanDeduction", "NewOutstanding", "REAL NOT NULL DEFAULT 0");
             MigrateColumn(conn, "LoanDeduction", "LoanType", "TEXT");
+
+            // Databases created before the working-hours attendance % lack these.
+            // AttendancePct is nullable (undefined when the employee has no shift).
+            MigrateColumn(conn, "SalarySlip", "ExpectedHours", "REAL NOT NULL DEFAULT 0");
+            MigrateColumn(conn, "SalarySlip", "AttendancePct", "REAL");
+            MigrateColumn(conn, "SalarySlip", "MissingCheckoutDays", "INTEGER NOT NULL DEFAULT 0");
         }
 
         // ---- Loans ------------------------------------------------------------------
@@ -587,12 +593,14 @@ VALUES ($l, $e, $p, $d, $a, $la, $inst, $po, $no, $ty, $r, $at);";
 INSERT INTO SalarySlip
  (PeriodKey, EnrollNumber, Name, Cnic, Department, Designation, Shift,
   WorkingDays, Present, Absent, PaidLeaveDays, UnpaidLeaveDays, LateCount, LateMinutes,
-  WorkedHours, OvertimeHours, LateDeductionDays, PayableDays,
+  WorkedHours, OvertimeHours, ExpectedHours, AttendancePct, MissingCheckoutDays,
+  LateDeductionDays, PayableDays,
   Salary, DailyRate, BasePay, OvertimePay, IncludeOvertime, LoanDeduction, NetPay, GeneratedAt)
 VALUES
  ($p, $e, $name, $cnic, $dep, $des, $shift,
   $wd, $pr, $ab, $pl, $ul, $lc, $lm,
-  $wh, $ot, $ldd, $pd,
+  $wh, $ot, $eh, $pct, $mco,
+  $ldd, $pd,
   $sal, $dr, $bp, $op, $io, $loan, $net, $at);";
                 cmd.Parameters.AddWithValue("$p", periodKey);
                 cmd.Parameters.AddWithValue("$e", s.Enroll ?? string.Empty);
@@ -610,6 +618,9 @@ VALUES
                 cmd.Parameters.AddWithValue("$lm", s.LateMinutes);
                 cmd.Parameters.AddWithValue("$wh", s.WorkedHours);
                 cmd.Parameters.AddWithValue("$ot", s.OvertimeHours);
+                cmd.Parameters.AddWithValue("$eh", s.ExpectedHours);
+                cmd.Parameters.AddWithValue("$pct", (object)s.AttendancePct ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("$mco", s.MissingCheckoutDays);
                 cmd.Parameters.AddWithValue("$ldd", s.LateDeductionDays);
                 cmd.Parameters.AddWithValue("$pd", s.PayableDays);
                 cmd.Parameters.AddWithValue("$sal", s.Salary);
@@ -636,7 +647,9 @@ VALUES
 SELECT EnrollNumber, Name, Cnic, Department, Designation, Shift,
        WorkingDays, Present, Absent, PaidLeaveDays, UnpaidLeaveDays, LateCount, LateMinutes,
        WorkedHours, OvertimeHours, LateDeductionDays, PayableDays,
-       Salary, DailyRate, BasePay, OvertimePay, IncludeOvertime, LoanDeduction, NetPay
+       Salary, DailyRate, BasePay, OvertimePay, IncludeOvertime, LoanDeduction, NetPay,
+       -- appended last so the ordinals above stay put
+       ExpectedHours, AttendancePct, MissingCheckoutDays
 FROM SalarySlip WHERE PeriodKey=$p ORDER BY CAST(EnrollNumber AS INTEGER);";
                     cmd.Parameters.AddWithValue("$p", periodKey);
                     using (var r = cmd.ExecuteReader())
@@ -667,6 +680,9 @@ FROM SalarySlip WHERE PeriodKey=$p ORDER BY CAST(EnrollNumber AS INTEGER);";
                                 IncludeOvertime = r.GetInt32(21) != 0,
                                 LoanDeduction = r.GetDouble(22),
                                 NetPay = r.GetDouble(23),
+                                ExpectedHours = r.GetDouble(24),
+                                AttendancePct = r.IsDBNull(25) ? (double?)null : r.GetDouble(25),
+                                MissingCheckoutDays = r.GetInt32(26),
                                 Loans = new List<LoanLine>()
                             });
                 }

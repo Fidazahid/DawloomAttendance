@@ -30,6 +30,54 @@ namespace DawloomAttendance.Views
             EmployeeList.ItemsSource = _db.GetEmployees()
                 .Select(e => new EmpPick { Enroll = e.EnrollNumber, Display = $"{e.EnrollNumber} - {e.Name}" })
                 .ToList();
+
+            // App-wide setting, so the emailed report and the salary screen agree with this one.
+            AllowAbove100Check.IsChecked = AttendancePercentage.AllowAbove100(_db);
+        }
+
+        private bool AllowAbove100 => AllowAbove100Check.IsChecked == true;
+
+        private void AllowAbove100_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_db == null) return;   // fires during InitializeComponent
+            AttendancePercentage.SetAllowAbove100(_db, AllowAbove100);
+            if (_current != null) RunButton_Click(sender, e);   // re-render with the new cap
+        }
+
+        /// <summary>
+        /// Add/remove punches for the selected row, exactly like the Dashboard's
+        /// "Edit Punches…" — same PunchEditWindow. Needs a row that identifies one
+        /// employee on one date, so it works on the dated reports (Daily detail,
+        /// Late arrivals, Absentees) but not the per-period Monthly summary.
+        /// </summary>
+        private void EditPunchesButton_Click(object sender, RoutedEventArgs e)
+        {
+            var row = (Grid.SelectedItem as DataRowView)?.Row;
+            if (row == null)
+            {
+                MessageBox.Show(Window.GetWindow(this), "Select a row first.", "Edit Punches",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (!row.Table.Columns.Contains("Date") || !row.Table.Columns.Contains("Enroll"))
+            {
+                MessageBox.Show(Window.GetWindow(this),
+                    "The Monthly summary covers a whole period, so there is no single date to edit.\n\n" +
+                    "Switch the Report dropdown to “Daily detail”, “Late arrivals” or “Absentees”, " +
+                    "then pick the day you want to fix.",
+                    "Edit Punches", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            if (!DateTime.TryParse(row["Date"]?.ToString(), out var date)) return;
+            string enroll = row["Enroll"]?.ToString();
+            if (string.IsNullOrWhiteSpace(enroll)) return;
+
+            var win = new PunchEditWindow(_db, enroll, date, Nm(_db.GetEmployees().ToDictionary(x => x.EnrollNumber), enroll))
+            { Owner = Window.GetWindow(this) };
+            win.ShowDialog();
+            if (win.Changed) RunButton_Click(sender, e);   // recompute so hours/% reflect the edit
         }
 
         private class EmpPick
@@ -115,7 +163,7 @@ namespace DawloomAttendance.Views
                 case "Daily detail": _current = DailyDetail(data, names, shiftByEnroll); _reportName = "Daily detail"; break;
                 case "Late arrivals": _current = LateList(data, names); _reportName = "Late arrivals"; break;
                 case "Absentees": _current = AbsentList(data, names); _reportName = "Absentees"; break;
-                default: _current = MonthlySummary(data, names, shiftByEnroll); _reportName = "Summary"; break;
+                default: _current = MonthlySummary(data, names, shiftByEnroll, AllowAbove100); _reportName = "Summary"; break;
             }
 
             Grid.ItemsSource = _current.DefaultView;
@@ -134,38 +182,36 @@ namespace DawloomAttendance.Views
             => names.TryGetValue(enroll, out var emp) ? emp.Designation : "";
 
         private static DataTable MonthlySummary(List<DailyAttendance> data, IDictionary<string, Data.Entities.Employee> names,
-            IDictionary<string, Data.Entities.Shift> shiftByEnroll)
+            IDictionary<string, Data.Entities.Shift> shiftByEnroll, bool allowAbove100)
         {
-            // Build per-employee rows with a numeric % so we can rank them.
-            // Attendance % is days-based (present ÷ working days) — the same formula the
-            // emailed per-employee report uses (see EmployeeReport.BuildSummary), so the two
-            // reports always agree.
+            // Build per-employee rows with a numeric % so we can rank them. The percentage
+            // is worked-hours ÷ expected-hours via AttendancePercentage — the same call the
+            // emailed report and the salary screen make, so they cannot drift apart again.
             var summaries = data.GroupBy(d => d.EnrollNumber).Select(g =>
             {
                 shiftByEnroll.TryGetValue(g.Key, out var shift);
-                int workingDays = g.Count(x => x.IsWorkingDay);
-                int present = g.Count(x => x.Present);
+                var pct = AttendancePercentage.Compute(g, shift, allowAbove100);
                 return new
                 {
                     Enroll = g.Key,
                     Shift = ShiftDisplay(shift),
-                    WorkingDays = workingDays,
-                    Present = present,
+                    WorkingDays = pct.WorkingDays,
+                    Present = g.Count(x => x.Present),
                     Absent = g.Count(x => x.Absent),
                     LateDays = g.Count(x => x.Late),
                     LateMinutes = g.Where(x => x.Late).Sum(x => x.LateMinutes),
-                    Worked = g.Sum(x => x.WorkedHours),
-                    Pct = workingDays > 0 ? (double?)(100.0 * present / workingDays) : null
+                    Pct = pct
                 };
             })
-            .OrderByDescending(x => x.Pct ?? -1)   // highest attendance first
+            .OrderByDescending(x => x.Pct.Percent ?? -1)   // highest attendance first
             .ThenBy(x => SortKey(x.Enroll))
             .ToList();
 
             var t = new DataTable();
             t.Columns.Add("Rank"); t.Columns.Add("Enroll"); t.Columns.Add("Name"); t.Columns.Add("Department"); t.Columns.Add("Shift");
             t.Columns.Add("Working days"); t.Columns.Add("Present"); t.Columns.Add("Absent");
-            t.Columns.Add("Late days"); t.Columns.Add("Late time"); t.Columns.Add("Worked"); t.Columns.Add("Attendance %");
+            t.Columns.Add("Late days"); t.Columns.Add("Late time");
+            t.Columns.Add("Expected"); t.Columns.Add("Worked"); t.Columns.Add("No checkout"); t.Columns.Add("Attendance %");
 
             int rank = 1;
             foreach (var x in summaries)
@@ -174,8 +220,11 @@ namespace DawloomAttendance.Views
                     rank++, x.Enroll, Nm(names, x.Enroll), Dept(names, x.Enroll), x.Shift,
                     x.WorkingDays, x.Present, x.Absent, x.LateDays,
                     DurationFormat.Minutes(x.LateMinutes),
-                    DurationFormat.Hours(x.Worked),
-                    x.Pct.HasValue ? x.Pct.Value.ToString("0.#") + "%" : "—");
+                    DurationFormat.Hours(x.Pct.ExpectedHours),
+                    DurationFormat.Hours(x.Pct.ActualHours),
+                    // Surfaced so a low score reads as "fix these punches", not "the report is wrong".
+                    x.Pct.MissingCheckoutDays == 0 ? "" : x.Pct.MissingCheckoutDays.ToString(),
+                    x.Pct.Display);
             }
             return t;
         }

@@ -65,6 +65,13 @@ namespace DawloomAttendance.Services
 
             string period = $"{from:yyyy-MM-dd} to {to:yyyy-MM-dd}";
 
+            // Each employee's own shift sets their expected hours; the cap choice is the
+            // app-wide setting, so an emailed % always matches what the Reports screen shows.
+            var shifts = db.GetShifts().ToDictionary(s => s.Id);
+            bool allowAbove100 = AttendancePercentage.AllowAbove100(db);
+            // Same "Overtime" toggle as the Salary screen: off = overtime is hidden on every report.
+            bool showOvertime = db.GetSetting("Salary.IncludeOvertime") != "0";
+
             int i = 0, total = plan.ToSend.Count;
             foreach (var e in plan.ToSend)
             {
@@ -77,7 +84,8 @@ namespace DawloomAttendance.Services
                     $"Dawloom_{Safe(e.EnrollNumber)}_{kind}_{Guid.NewGuid():N}.pdf");
                 try
                 {
-                    EmployeeReport.WritePdf(path, e, from, to, days);
+                    var shift = (e.ShiftId.HasValue && shifts.TryGetValue(e.ShiftId.Value, out var sh)) ? sh : null;
+                    EmployeeReport.WritePdf(path, e, from, to, days, shift, allowAbove100, showOvertime);
                     var subject = EmailService.FormatSubject(subjectTemplate, e.Name ?? e.EnrollNumber, period);
                     var body = $"Dear {e.Name ?? "employee"},\r\n\r\nPlease find attached your attendance report for {period}.\r\n\r\nRegards,\r\n{fromName}";
                     EmailService.Send(email, e.Email, subject, body, path, fromName);

@@ -16,6 +16,10 @@ namespace DawloomAttendance.Tests
         private static DailyAttendance Leave(DateTime d, bool paid) =>
             new DailyAttendance { Date = d, IsWorkingDay = false, IsLeave = true, PaidLeave = paid, Category = DayCategory.Off };
 
+        // 09:00-18:00 = a 9-hour shift.
+        private static Data.Entities.Shift NineHourShift() =>
+            new Data.Entities.Shift { Name = "Day", StartTime = "09:00", EndTime = "18:00" };
+
         [TestMethod]
         public void Summary_CountsAttendanceCorrectly()
         {
@@ -29,16 +33,18 @@ namespace DawloomAttendance.Tests
                 Leave(d.AddDays(4), paid: false),
             };
 
-            var summary = EmployeeReport.BuildSummary(days)
+            var summary = EmployeeReport.BuildSummary(days, NineHourShift(), allowAbove100: false)
                 .ToDictionary(kv => kv.Key, kv => kv.Value);
 
-            Assert.AreEqual("3", summary["Working days"]);   // 3 working days
+            // Leave days are already IsWorkingDay=false, so they are excluded from the divisor.
+            Assert.AreEqual("3", summary["Working days"]);
             Assert.AreEqual("2", summary["Present"]);
             Assert.AreEqual("1", summary["Absent"]);
             Assert.AreEqual("1", summary["Paid leave"]);
             Assert.AreEqual("1", summary["Unpaid leave"]);
             Assert.AreEqual("1", summary["Late count"]);
-            Assert.AreEqual("66.7%", summary["Attendance %"]);  // 2/3
+            // Hours-based: worked 16h against 3 working days x 9h = 27h expected.
+            Assert.AreEqual("59.3%", summary["Attendance %"]);
         }
 
         [TestMethod]

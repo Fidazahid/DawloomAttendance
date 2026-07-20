@@ -36,6 +36,12 @@ namespace DawloomAttendance.Services
 
                 int present = g.Count(x => x.Present);
                 int workingDays = g.Count(x => x.IsWorkingDay) + paidLeave + unpaidLeave;
+
+                // Attendance % is a separate question from pay: it measures hours worked
+                // against scheduled hours (leave excluded), while workingDays above keeps
+                // leave IN the divisor so paid leave is paid. Computed raw/uncapped here;
+                // the cap is applied where it is displayed. Never feeds the pay maths.
+                var attendance = AttendancePercentage.Compute(g, shift, allowAbove100: true);
                 int lateCount = g.Count(x => x.Late);
                 double otHours = g.Sum(x => x.OvertimeHours);
 
@@ -67,6 +73,9 @@ namespace DawloomAttendance.Services
                     LateMinutes = g.Where(x => x.Late).Sum(x => x.LateMinutes),
                     WorkedHours = g.Sum(x => x.WorkedHours),
                     OvertimeHours = otHours,
+                    ExpectedHours = attendance.ExpectedHours,
+                    AttendancePct = attendance.Percent,
+                    MissingCheckoutDays = attendance.MissingCheckoutDays,
                     LateDeductionDays = lateDeductionDays,
                     PayableDays = payableDays,
                     Salary = salary,

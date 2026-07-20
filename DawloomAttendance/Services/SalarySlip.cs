@@ -21,6 +21,19 @@ namespace DawloomAttendance.Services
         public double WorkedHours { get; set; }
         public double OvertimeHours { get; set; }
 
+        /// <summary>Working days x shift length — what WorkedHours is measured against.</summary>
+        public double ExpectedHours { get; set; }
+
+        /// <summary>
+        /// Worked ÷ expected hours, stored RAW (never capped) so toggling
+        /// "Allow % above 100%" only changes the display, never the stored slip.
+        /// Null when undefined (no shift / no working days).
+        /// </summary>
+        public double? AttendancePct { get; set; }
+
+        /// <summary>Working days punched in but never out — 0 hours credited, pay unaffected.</summary>
+        public int MissingCheckoutDays { get; set; }
+
         public double LateDeductionDays { get; set; }
         public double PayableDays { get; set; }
 

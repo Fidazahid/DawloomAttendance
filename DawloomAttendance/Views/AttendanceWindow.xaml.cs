@@ -40,6 +40,13 @@ namespace DawloomAttendance.Views
             var names = _db.GetEmployees().ToDictionary(emp => emp.EnrollNumber, emp => emp.Name);
             var results = new AttendanceService(_db).ComputeForDate(date);
 
+            // Overtime unchecked on the Salary screen = overtime is hidden everywhere, not
+            // merely left out of pay. Re-read on each refresh so toggling it takes effect
+            // without restarting the app.
+            OtColumn.Visibility = _db.GetSetting("Salary.IncludeOvertime") != "0"
+                ? System.Windows.Visibility.Visible
+                : System.Windows.Visibility.Collapsed;
+
             Grid.ItemsSource = results.Select(r => new AttendanceRow
             {
                 Enroll = r.EnrollNumber,

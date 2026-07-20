@@ -28,7 +28,7 @@
                 <DataGridTextColumn Header="Late" Binding="{Binding Late}" Width="80" />
                 <DataGridTextColumn Header="Early" Binding="{Binding Early}" Width="80" />
                 <DataGridTextColumn Header="Worked" Binding="{Binding Worked}" Width="80" />
-                <DataGridTextColumn Header="OT" Binding="{Binding OT}" Width="70" />
+                <DataGridTextColumn x:Name="OtColumn" Header="OT" Binding="{Binding OT}" Width="70" />
                 <DataGridTextColumn Header="Notes" Binding="{Binding Notes}" Width="*" />
             </DataGrid.Columns>
         </DataGrid>

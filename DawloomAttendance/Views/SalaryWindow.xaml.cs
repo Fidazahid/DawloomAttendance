@@ -37,7 +37,17 @@ namespace DawloomAttendance.Views
             _loadingOptions = true;   // don't let these programmatic sets re-save (and clobber) each other
             OvertimeCheck.IsChecked = _db.GetSetting("Salary.IncludeOvertime") != "0";
             DeductionCheck.IsChecked = _db.GetSetting("Salary.ApplyDeduction") != "0";
+            AllowAbove100Check.IsChecked = AttendancePercentage.AllowAbove100(_db);
             _loadingOptions = false;
+        }
+
+        /// <summary>Display-only cap for the attendance % on the slip; shared app-wide with Reports.</summary>
+        private bool AllowAbove100 => AllowAbove100Check.IsChecked == true;
+
+        private void AllowAbove100_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_loadingOptions || _db == null) return;
+            AttendancePercentage.SetAllowAbove100(_db, AllowAbove100);
         }
 
         // Persist each toggle immediately so the checkboxes keep their state across tabs/sessions.
@@ -131,7 +141,7 @@ namespace DawloomAttendance.Views
 
             try
             {
-                PdfExport.WriteSalarySlips(dlg.FileName, b.MonthYear, slips);
+                PdfExport.WriteSalarySlips(dlg.FileName, b.MonthYear, slips, AllowAbove100);
                 System.Diagnostics.Process.Start(dlg.FileName);
                 StatusText.Text = $"Re-generated {slips.Count} slip(s) for {b.MonthYear}.";
             }
