@@ -196,7 +196,10 @@ namespace DawloomAttendance.Views
                     Enroll = g.Key,
                     Shift = ShiftDisplay(shift),
                     WorkingDays = pct.WorkingDays,
-                    Present = g.Count(x => x.Present),
+                    // Scheduled days only, so Present + Absent always equals Working days.
+                    // Work done on a weekend/holiday shows up in Worked hours and the
+                    // attendance %, not as an extra "present" day the column can't explain.
+                    Present = g.Count(x => x.Present && x.IsWorkingDay),
                     Absent = g.Count(x => x.Absent),
                     LateDays = g.Count(x => x.Late),
                     LateMinutes = g.Where(x => x.Late).Sum(x => x.LateMinutes),

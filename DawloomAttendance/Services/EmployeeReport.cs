@@ -35,7 +35,9 @@ namespace DawloomAttendance.Services
             var rows = new List<KeyValuePair<string, string>>
             {
                 Kv("Working days", pct.WorkingDays.ToString()),
-                Kv("Present", list.Count(d => d.Present).ToString()),
+                // Scheduled days only, so Present + Absent adds up to Working days; off-day
+                // work is reflected in Worked hours / Overtime instead.
+                Kv("Present", list.Count(d => d.Present && d.IsWorkingDay).ToString()),
                 Kv("Absent", absent.ToString()),
                 Kv("Paid leave", paidLeave.ToString()),
                 Kv("Unpaid leave", unpaidLeave.ToString()),

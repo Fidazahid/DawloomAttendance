@@ -44,13 +44,43 @@
         <!-- Actions for the selected month -->
         <Border Grid.Row="2" BorderBrush="#FFCCCCCC" BorderThickness="1" Padding="8" Margin="0,10,0,0">
             <StackPanel Orientation="Horizontal">
-                <Button x:Name="RegenButton" Content="Re-generate PDF" Width="130" Height="28" Margin="0,0,8,0" Click="RegenButton_Click" />
-                <TextBlock Text="Send to:" VerticalAlignment="Center" Margin="0,0,6,0" />
-                <ComboBox x:Name="RecipientCombo" Width="170" Height="26" VerticalAlignment="Center" Margin="0,0,8,0"
-                          DisplayMemberPath="Display"
-                          ToolTip="Choose all employees or one person to email the slip to." />
-                <Button x:Name="SendButton" Content="Send now (email)" Width="130" Height="28" Margin="0,0,16,0" Click="SendButton_Click"
-                        ToolTip="Email the selected recipient their slip. Interns (no salary) are skipped." />
+                <TextBlock Text="Employees:" VerticalAlignment="Center" Margin="0,0,6,0" />
+                <!-- Tick-list dropdown. It drives BOTH buttons below, so the PDF and the
+                     email always cover exactly the same people. The overlay TextBlock is
+                     the closed-state caption ("All employees" / "3 selected"), because a
+                     multi-tick ComboBox has no single SelectedItem to show. -->
+                <Grid VerticalAlignment="Center" Margin="0,0,8,0">
+                    <ComboBox x:Name="RecipientCombo" Width="220" Height="26"
+                              SelectionChanged="RecipientCombo_SelectionChanged"
+                              ToolTip="Tick who to include. Nothing ticked = every employee.">
+                        <ComboBox.ItemContainerStyle>
+                            <Style TargetType="ComboBoxItem">
+                                <!-- Bare ContentPresenter: ticking a box must not close the list. -->
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ComboBoxItem">
+                                            <ContentPresenter />
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ComboBox.ItemContainerStyle>
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Display}" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                          FontWeight="{Binding Weight}" Margin="6,3" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <TextBlock x:Name="RecipientSummary" Text="All employees" IsHitTestVisible="False"
+                               VerticalAlignment="Center" Margin="8,0,26,0" TextTrimming="CharacterEllipsis" />
+                </Grid>
+                <Button x:Name="RegenButton" Content="Create PDF" Width="110" Height="28" Margin="0,0,8,0" Click="RegenButton_Click"
+                        ToolTip="Build the slip PDF for the ticked employees only." />
+                <Button x:Name="SendButton" Content="Send now (email)" Width="130" Height="28" Margin="0,0,8,0" Click="SendButton_Click"
+                        ToolTip="Email their slip to the ticked employees only. Interns (no salary) are skipped." />
+                <Button x:Name="RecalcButton" Content="Recalculate attendance %" Width="160" Height="28" Margin="0,0,16,0" Click="RecalcButton_Click"
+                        ToolTip="Refills Expected hours and Attendance % on this month's stored slips from the punch data. Pay, loan deductions and net pay are not changed. Needed for months generated before the attendance % feature (they print a blank Expected hours and “—”)." />
                 <TextBlock Text="Auto-send on:" VerticalAlignment="Center" Margin="0,0,6,0" />
                 <DatePicker x:Name="SchedDate" Width="130" VerticalAlignment="Center" Margin="0,0,8,0" />
                 <CheckBox x:Name="SchedEnabled" Content="Enabled" VerticalAlignment="Center" Margin="0,0,8,0" />

@@ -75,9 +75,15 @@ namespace DawloomAttendance.Views
         private void Reload()
         {
             var prev = Selected?.PeriodKey;
-            BatchGrid.ItemsSource = _db.GetSalaryBatches();
-            StatusText.Text = $"{(BatchGrid.ItemsSource as IEnumerable<SalaryBatch>)?.Count() ?? 0} generated month(s).";
+            var batches = _db.GetSalaryBatches();
+            BatchGrid.ItemsSource = batches;
+            StatusText.Text = $"{batches?.Count ?? 0} generated month(s).";
             if (prev != null) SelectKey(prev);
+
+            // Land on a month straight away, otherwise the employee tick-list and the
+            // action buttons all sit there empty until you happen to click a row.
+            if (Selected == null && batches != null && batches.Count > 0)
+                BatchGrid.SelectedItem = batches[0];
         }
 
         private void SelectKey(string key)
@@ -129,13 +135,23 @@ namespace DawloomAttendance.Views
             var b = Selected;
             if (b == null) { Warn("Select a month first."); return; }
 
-            var slips = SalaryService.Load(_db, b.PeriodKey);
-            if (slips.Count == 0) { Warn("No slips stored for this month."); return; }
+            var allSlips = SalaryService.Load(_db, b.PeriodKey);
+            if (allSlips.Count == 0) { Warn("No slips stored for this month."); return; }
+
+            bool isAll; string who;
+            var slips = ApplySelection(allSlips, out isAll, out who);
+            if (slips.Count == 0) { Warn("No slip stored for the ticked employee(s) this month."); return; }
+
+            // One person gets their own name on the file; a subset says so, so a PDF
+            // holding 3 of 30 slips can't be mistaken for the full month's run.
+            string stem = isAll ? "Dawloom_SalarySlips"
+                : slips.Count == 1 ? $"Dawloom_SalarySlip_{slips[0].Enroll}"
+                : $"Dawloom_SalarySlips_{slips.Count}_selected";
 
             var dlg = new Microsoft.Win32.SaveFileDialog
             {
                 Filter = "PDF (*.pdf)|*.pdf",
-                FileName = $"Dawloom_SalarySlips_{b.PeriodFrom:yyyy_MM}.pdf"
+                FileName = $"{stem}_{b.PeriodFrom:yyyy_MM}.pdf"
             };
             if (dlg.ShowDialog() != true) return;
 
@@ -143,11 +159,34 @@ namespace DawloomAttendance.Views
             {
                 PdfExport.WriteSalarySlips(dlg.FileName, b.MonthYear, slips, AllowAbove100);
                 System.Diagnostics.Process.Start(dlg.FileName);
-                StatusText.Text = $"Re-generated {slips.Count} slip(s) for {b.MonthYear}.";
+                StatusText.Text = $"Created {slips.Count} slip(s) for {b.MonthYear} — {who}.";
             }
             catch (Exception ex)
             {
                 MessageBox.Show(Window.GetWindow(this), "PDF failed: " + ex.Message, "Salary",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void RecalcButton_Click(object sender, RoutedEventArgs e)
+        {
+            var b = Selected;
+            if (b == null) { Warn("Select a month first."); return; }
+
+            if (MessageBox.Show(Window.GetWindow(this),
+                    $"Recalculate Expected hours and Attendance % for {b.MonthYear} from the punch data?\n\n" +
+                    "Pay, loan deductions and net pay are NOT changed.",
+                    "Recalculate attendance", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+
+            try
+            {
+                int n = SalaryService.RecalculateAttendance(_db, b.PeriodKey);
+                StatusText.Text = $"Recalculated attendance on {n} slip(s) for {b.MonthYear}. Pay unchanged.";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Window.GetWindow(this), "Recalculate failed: " + ex.Message, "Salary",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
@@ -169,23 +208,22 @@ namespace DawloomAttendance.Views
             var allSlips = SalaryService.Load(_db, b.PeriodKey);
             if (allSlips.Count == 0) { Warn("No slips stored for this month."); return; }
 
-            // Recipient: "All employees" (Enroll == null) or one selected person.
-            var recipient = RecipientCombo.SelectedItem as RecipientItem;
-            bool sendAll = recipient == null || recipient.Enroll == null;
-            var slips = sendAll
-                ? allSlips
-                : (IReadOnlyList<SalarySlip>)allSlips.Where(s => s.Enroll == recipient.Enroll).ToList();
-            if (slips.Count == 0) { Warn("No slip stored for that employee this month."); return; }
+            // Recipients: whoever is ticked in the dropdown (nothing ticked = everyone).
+            bool sendAll; string who;
+            var slips = ApplySelection(allSlips, out sendAll, out who);
+            if (slips.Count == 0) { Warn("No slip stored for the ticked employee(s) this month."); return; }
 
             string prompt = sendAll
                 ? $"Email {b.MonthYear} salary slips to all employees?\n(Interns with no salary are skipped.)"
-                : $"Email the {b.MonthYear} salary slip to {recipient.Display}?";
+                : $"Email the {b.MonthYear} salary slip to {who}?\n\n" +
+                  string.Join("\n", slips.Take(15).Select(s => $"   • {s.Enroll} — {s.Name}")) +
+                  (slips.Count > 15 ? $"\n   … and {slips.Count - 15} more" : "");
             if (MessageBox.Show(Window.GetWindow(this), prompt, "Send Slips",
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
             SendButton.IsEnabled = false;
-            StatusText.Text = sendAll ? "Sending salary slips …" : $"Sending slip to {recipient.Display} …";
+            StatusText.Text = sendAll ? "Sending salary slips …" : $"Sending slip to {who} …";
             try
             {
                 var names = _db.GetEmployees().ToDictionary(x => x.EnrollNumber);
@@ -259,21 +297,115 @@ namespace DawloomAttendance.Views
             PopulateRecipients(b);
         }
 
-        /// <summary>The email target: "All employees" plus each employee with a slip that month.</summary>
-        private sealed class RecipientItem
+        /// <summary>
+        /// One tickable row in the employee dropdown: "All employees" (Enroll == null,
+        /// a select-all/none toggle) plus each employee with a slip that month.
+        /// </summary>
+        private sealed class RecipientItem : System.ComponentModel.INotifyPropertyChanged
         {
-            public string Enroll { get; set; }   // null = all employees
+            public string Enroll { get; set; }   // null = the "All employees" toggle row
             public string Display { get; set; }
+            public string Weight => Enroll == null ? "Bold" : "Normal";
+
+            private bool _isSelected;
+            public bool IsSelected
+            {
+                get { return _isSelected; }
+                set
+                {
+                    if (_isSelected == value) return;
+                    _isSelected = value;
+                    PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsSelected)));
+                }
+            }
+
+            public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
         }
+
+        private List<RecipientItem> _recipients = new List<RecipientItem>();
+        private bool _syncingTicks;   // guards the All-row <-> per-person cascade
 
         private void PopulateRecipients(SalaryBatch b)
         {
-            var items = new List<RecipientItem> { new RecipientItem { Enroll = null, Display = "All employees" } };
+            foreach (var old in _recipients) old.PropertyChanged -= Recipient_PropertyChanged;
+
+            _recipients = new List<RecipientItem> { new RecipientItem { Enroll = null, Display = "All employees" } };
             if (b != null)
                 foreach (var s in _db.GetSlipSnapshots(b.PeriodKey))
-                    items.Add(new RecipientItem { Enroll = s.Enroll, Display = $"{s.Enroll} — {s.Name}" });
-            RecipientCombo.ItemsSource = items;
-            RecipientCombo.SelectedIndex = 0;
+                    _recipients.Add(new RecipientItem { Enroll = s.Enroll, Display = $"{s.Enroll} — {s.Name}" });
+
+            foreach (var r in _recipients) r.PropertyChanged += Recipient_PropertyChanged;
+            RecipientCombo.ItemsSource = _recipients;
+            UpdateRecipientSummary();
+        }
+
+        private IEnumerable<RecipientItem> People => _recipients.Where(r => r.Enroll != null);
+
+        /// <summary>Ticked employees; empty means "no filter" — i.e. everyone.</summary>
+        private List<string> SelectedEnrolls => People.Where(r => r.IsSelected).Select(r => r.Enroll).ToList();
+
+        private void Recipient_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (_syncingTicks) return;
+            _syncingTicks = true;
+            try
+            {
+                var item = (RecipientItem)sender;
+                if (item.Enroll == null)
+                {
+                    // The All row is a plain select-all / clear-all switch.
+                    foreach (var r in People) r.IsSelected = item.IsSelected;
+                }
+                else
+                {
+                    // Keep the All row honest: ticked only when every person is ticked.
+                    var all = _recipients.First();
+                    all.IsSelected = People.Any() && People.All(r => r.IsSelected);
+                }
+            }
+            finally { _syncingTicks = false; }
+            UpdateRecipientSummary();
+        }
+
+        private void UpdateRecipientSummary()
+        {
+            var picked = SelectedEnrolls;
+            RecipientSummary.Text =
+                picked.Count == 0 || picked.Count == People.Count() ? "All employees"
+                : picked.Count == 1 ? People.First(r => r.IsSelected).Display
+                : $"{picked.Count} selected";
+        }
+
+        // A multi-tick list has no meaningful SelectedItem; clicking the row margin would
+        // otherwise leave one highlighted underneath the caption.
+        private void RecipientCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (RecipientCombo.SelectedIndex >= 0) RecipientCombo.SelectedIndex = -1;
+        }
+
+        /// <summary>
+        /// Narrows a month's slips to the ticked employees. Nothing ticked (or everyone
+        /// ticked) = the whole month, which is what <paramref name="isAll"/> reports —
+        /// only a whole-month send may mark the batch as sent.
+        /// </summary>
+        private IReadOnlyList<SalarySlip> ApplySelection(
+            IReadOnlyList<SalarySlip> all, out bool isAll, out string who)
+        {
+            var picked = SelectedEnrolls;
+            if (picked.Count == 0 || picked.Count == People.Count())
+            {
+                isAll = true;
+                who = "all employees";
+                return all;
+            }
+
+            var set = new HashSet<string>(picked);
+            var subset = (IReadOnlyList<SalarySlip>)all.Where(s => set.Contains(s.Enroll)).ToList();
+            isAll = false;
+            who = subset.Count == 1
+                ? (subset[0].Name ?? subset[0].Enroll)
+                : $"{subset.Count} selected employees";
+            return subset;
         }
 
         private void Warn(string msg) =>

@@ -7,7 +7,7 @@
 
 $ErrorActionPreference = "Stop"
 $root    = Split-Path $PSScriptRoot -Parent
-$version = "1.0.0"
+$version = "1.1.0"
 $rel     = Join-Path $root "DawloomAttendance\bin\Release"
 $sdk     = Join-Path $root "DawloomAttendance\lib\zkteco"
 $cfgSrc  = Join-Path $PSScriptRoot "DawloomAttendance.exe.config"

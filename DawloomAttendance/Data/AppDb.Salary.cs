@@ -772,6 +772,42 @@ FROM SalaryBatch WHERE PeriodKey=$p;";
             }
         }
 
+        /// <summary>
+        /// Rewrites only the two attendance-display columns on a month's stored slips.
+        /// Pay, loan deductions and net pay are deliberately untouched: months snapshotted
+        /// before the working-hours attendance % existed got 0 / NULL from the column
+        /// migration, and re-generating the whole month would deduct their loans twice.
+        /// MissingCheckoutDays is left alone — it cannot be recovered from the snapshot,
+        /// and writing a value recomputed from today's punches would contradict the rest
+        /// of the row.
+        /// </summary>
+        public int UpdateSlipAttendance(string periodKey,
+            IEnumerable<(string Enroll, double ExpectedHours, double? Pct)> rows)
+        {
+            int n = 0;
+            using (var conn = Open())
+            using (var tx = conn.BeginTransaction())
+            {
+                foreach (var row in rows)
+                {
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.Transaction = tx;
+                        cmd.CommandText = @"
+UPDATE SalarySlip SET ExpectedHours=$eh, AttendancePct=$pct
+WHERE PeriodKey=$p AND EnrollNumber=$e;";
+                        cmd.Parameters.AddWithValue("$eh", row.ExpectedHours);
+                        cmd.Parameters.AddWithValue("$pct", (object)row.Pct ?? DBNull.Value);
+                        cmd.Parameters.AddWithValue("$p", periodKey);
+                        cmd.Parameters.AddWithValue("$e", row.Enroll ?? string.Empty);
+                        n += cmd.ExecuteNonQuery();
+                    }
+                }
+                tx.Commit();
+            }
+            return n;
+        }
+
         public void MarkBatchSent(string periodKey, DateTime at)
         {
             using (var conn = Open())
